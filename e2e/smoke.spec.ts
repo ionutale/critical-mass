@@ -15,9 +15,12 @@ test('fuses helium, delivers the contract, and persists after reload', async ({ 
 	await expect(page.getByText('5 / 100')).toBeVisible();
 
 	await page.getByRole('button', { name: /deliver helium/i }).click();
-	await expect(page.getByText('CONTRACT COMPLETE')).toBeVisible();
+	const draft = page.getByRole('dialog', { name: /choose one upgrade/i });
+	await expect(draft).toBeVisible();
+	await draft.getByRole('button').first().click();
+	await expect(page.getByText(/contract 2\/5/i)).toBeVisible();
 
 	await page.reload();
-	await expect(page.getByText('CONTRACT COMPLETE')).toBeVisible();
+	await expect(page.getByText(/contract 2\/5/i)).toBeVisible();
 	await expect(page.getByText('5 / 100')).toBeVisible();
 });

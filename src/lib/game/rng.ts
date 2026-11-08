@@ -13,6 +13,15 @@ export function nextRandom(state: number): RngStep {
 	};
 }
 
+export function pickIndex(state: number, length: number): { index: number; state: number } {
+	if (length <= 0) return { index: 0, state };
+	const step = nextRandom(state);
+	return {
+		index: Math.floor(step.value * length),
+		state: step.state
+	};
+}
+
 export function shuffleWithState<T>(
 	items: readonly T[],
 	state: number

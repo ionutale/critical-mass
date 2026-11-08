@@ -1,4 +1,5 @@
 import type { ElementRecord, RecipeRecord, RunState } from '../types';
+import { chainReduction, fusionScale, heavyReduction } from './effects';
 import { endTurn } from './turn';
 
 export interface FusionStep {
@@ -16,6 +17,7 @@ export interface PlacementPreview {
 	pressureGain: number;
 	pressureAfter: number;
 	meltdown: boolean;
+	saved: boolean;
 }
 
 function neighbors(cell: number): number[] {
@@ -53,6 +55,7 @@ export function previewPlacement(
 	recipes: readonly RecipeRecord[]
 ): PlacementPreview | null {
 	if (run.status !== 'active') return null;
+	if (run.pendingDraft || run.pendingTransition) return null;
 	if (cell < 0 || cell > 24 || run.grid[cell] !== null) return null;
 
 	const placed = run.hand[handIndex];
@@ -85,7 +88,14 @@ export function previewPlacement(
 		const resultElement = bySymbol.get(result);
 		if (!resultElement) break;
 
-		const pressure = 4 + resultElement.tier + 2 * index + (resultElement.heavy ? 8 : 0);
+		const heavyDiscount = resultElement.heavy ? heavyReduction(run) : 0;
+		const basePressure =
+			4 + resultElement.tier + 2 * index + (resultElement.heavy ? 8 : 0) - heavyDiscount;
+		const chainDiscount = index === 0 ? 0 : Math.min(2 * index, chainReduction(run));
+		const pressure = Math.max(
+			1,
+			Math.round(Math.max(1, basePressure - chainDiscount) * fusionScale(run))
+		);
 		steps.push({
 			step: index + 1,
 			a: active,
@@ -100,13 +110,17 @@ export function previewPlacement(
 		active = result;
 	}
 
-	const pressureAfter = run.pressure + pressureGain;
+	const overCap = run.pressure + pressureGain >= run.pressureCap;
+	const saved = overCap && run.meltdownSaves > 0;
+	const pressureAfter = saved ? run.pressureCap - 1 : run.pressure + pressureGain;
+
 	return {
 		steps,
 		grid,
 		pressureGain,
 		pressureAfter,
-		meltdown: pressureAfter >= run.pressureCap
+		meltdown: overCap && !saved,
+		saved
 	};
 }
 
@@ -123,6 +137,8 @@ export function placeCard(
 	const card = run.hand[handIndex];
 	const hand = run.hand.filter((_, index) => index !== handIndex);
 
+	const meltdownSaves = preview.saved ? run.meltdownSaves - 1 : run.meltdownSaves;
+
 	const next: RunState = {
 		...run,
 		grid: preview.grid,
@@ -130,6 +146,8 @@ export function placeCard(
 		discard: [...run.discard, card],
 		pressure: preview.pressureAfter,
 		maxChain: Math.max(run.maxChain, preview.steps.length),
+		contractMaxChain: Math.max(run.contractMaxChain, preview.steps.length),
+		meltdownSaves,
 		status: preview.meltdown ? 'meltdown' : 'active'
 	};
 

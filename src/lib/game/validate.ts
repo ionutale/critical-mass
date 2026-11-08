@@ -74,11 +74,56 @@ export function validateContent(content: {
 	}
 
 	const withCatalyst = closure(content.elements, content.recipes, true);
+	const elementBySymbol = new Map(content.elements.map((element) => [element.symbol, element]));
+	const seenContracts = new Set<string>();
+
 	for (const contract of content.contracts) {
-		if (!symbols.has(contract.target)) {
+		if (seenContracts.has(contract.id)) errors.push(`Duplicate contract id ${contract.id}.`);
+		seenContracts.add(contract.id);
+
+		if (contract.count < 1 || contract.count > 3) {
+			errors.push(`Contract ${contract.id} has an invalid count.`);
+		}
+
+		const target = elementBySymbol.get(contract.target);
+		if (!target) {
 			errors.push(`Contract ${contract.id} targets an unknown element.`);
-		} else if (!withCatalyst.has(contract.target)) {
+			continue;
+		}
+
+		const reachable = contract.sector === 3 ? withCatalyst : withoutCatalyst;
+		if (!reachable.has(contract.target)) {
 			errors.push(`Contract ${contract.id} targets an unreachable element.`);
+		}
+
+		if (contract.sector === 1 && (target.heavy || target.tier > 7)) {
+			errors.push(`Contract ${contract.id} targets an element beyond sector 1.`);
+		}
+		if (contract.sector === 2 && (target.heavy || target.tier > 14)) {
+			errors.push(`Contract ${contract.id} targets an element beyond sector 2.`);
+		}
+		if (contract.sector === 3 && !target.heavy) {
+			errors.push(`Contract ${contract.id} does not target a heavy element.`);
+		}
+
+		if (contract.slot === 5) {
+			const boss = contract.sector === 1 ? 'Mg' : contract.sector === 2 ? 'Fe' : 'U';
+			if (contract.target !== boss) {
+				errors.push(`Contract ${contract.id} is not the ${boss} sector boss.`);
+			}
+		}
+	}
+
+	for (const sector of [1, 2, 3] as const) {
+		const inSector = content.contracts.filter((contract) => contract.sector === sector);
+		if (inSector.length !== 10) {
+			errors.push(`Sector ${sector} has ${inSector.length} contracts instead of 10.`);
+		}
+		for (const slot of [1, 2, 3, 4, 5] as const) {
+			const variants = inSector.filter((contract) => contract.slot === slot);
+			if (variants.length !== 2) {
+				errors.push(`Sector ${sector} slot ${slot} has ${variants.length} variants instead of 2.`);
+			}
 		}
 	}
 

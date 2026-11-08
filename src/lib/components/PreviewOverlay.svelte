@@ -49,6 +49,8 @@
 
 		{#if preview.meltdown}
 			<p class="warning" role="alert">That would hit the cap. Meltdown.</p>
+		{:else if preview.saved}
+			<p class="warning" role="status">Emergency shield holds. Pressure stops at the cap.</p>
 		{/if}
 
 		<div class="actions">

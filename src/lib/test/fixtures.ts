@@ -35,7 +35,14 @@ export function runFixture(overrides: Partial<RunState> = {}): RunState {
 		maxChain: 0,
 		deliveredTargets: [],
 		pendingDraft: null,
+		pendingDraftKind: null,
 		pendingTransition: false,
+		patches: [],
+		researchEarned: 0,
+		contractMaxChain: 0,
+		contractReduction: 0,
+		meltdownSaves: 0,
+		sectorShield: 0,
 		status: 'active',
 		...overrides
 	};

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { beforeEach, describe, expect, it } from 'vitest';
 import RunScreen from './RunScreen.svelte';
 import { initGame } from '../stores/game';
+import { runFixture } from '../test/fixtures';
 
 beforeEach(() => {
 	window.localStorage.clear();
@@ -26,7 +27,15 @@ describe('run screen', () => {
 		expect(screen.getByLabelText(/pressure 5 of 100/i)).toBeInTheDocument();
 
 		await fireEvent.click(screen.getByRole('button', { name: /deliver helium/i }));
-		expect(screen.getByText(/contract complete/i)).toBeInTheDocument();
+
+		const draft = screen.getByRole('dialog', { name: /choose one upgrade/i });
+		expect(draft).toBeInTheDocument();
+		const options = within(draft).getAllByRole('button');
+		expect(options).toHaveLength(3);
+
+		await fireEvent.click(options[0]);
+		expect(screen.queryByRole('dialog', { name: /choose one upgrade/i })).not.toBeInTheDocument();
+		expect(screen.getByText(/contract 2\/5/i)).toBeInTheDocument();
 	});
 
 	it('cancels without changing the board', async () => {
@@ -69,5 +78,37 @@ describe('run screen', () => {
 
 		expect(screen.getByRole('button', { name: /cell 12/i })).toHaveTextContent('·');
 		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
+	});
+
+	it('opens a mandatory sector transition and free module draft', async () => {
+		initGame({
+			run: runFixture({
+				sector: 1,
+				contractId: 's1-5a',
+				delivered: 1,
+				pendingTransition: true,
+				pressure: 40
+			})
+		});
+		render(RunScreen);
+
+		expect(screen.getByRole('dialog', { name: /sector 2/i })).toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: /enter sector 2/i }));
+
+		expect(screen.getByRole('dialog', { name: /choose a free module/i })).toBeInTheDocument();
+		expect(screen.getAllByRole('button', { name: /module/i })).toHaveLength(3);
+	});
+
+	it('shows the victory and meltdown end screens', () => {
+		initGame({ run: runFixture({ status: 'victory', researchEarned: 4 }) });
+		const { unmount } = render(RunScreen);
+		const victory = screen.getByRole('dialog', { name: /victory/i });
+		expect(victory).toBeInTheDocument();
+		expect(within(victory).getByText('+4')).toBeInTheDocument();
+		unmount();
+
+		initGame({ run: runFixture({ status: 'meltdown', pressure: 100 }) });
+		render(RunScreen);
+		expect(screen.getByRole('alert')).toHaveTextContent(/meltdown/i);
 	});
 });

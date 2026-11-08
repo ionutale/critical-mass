@@ -1,7 +1,6 @@
 import type { RunState } from '../types';
+import { drawAmount, handCap, ventAmount } from './effects';
 import { shuffleWithState } from './rng';
-
-const HAND_CAP = 7;
 
 function startingDeck(): string[] {
 	return [...Array<string>(8).fill('H'), 'He', 'He'];
@@ -38,7 +37,14 @@ export function createRun(seed: number): RunState {
 		maxChain: 0,
 		deliveredTargets: [],
 		pendingDraft: null,
+		pendingDraftKind: null,
 		pendingTransition: false,
+		patches: [],
+		researchEarned: 0,
+		contractMaxChain: 0,
+		contractReduction: 0,
+		meltdownSaves: 0,
+		sectorShield: 0,
 		status: 'active'
 	};
 }
@@ -61,15 +67,19 @@ function drawOne(run: RunState): RunState {
 }
 
 export function endTurn(run: RunState): RunState {
-	const drawn = drawOne({
+	let drawn = drawOne({
 		...run,
 		turn: run.turn + 1,
 		scrapsUsed: 0
 	});
 
+	for (let index = 1; index < drawAmount(run); index++) {
+		drawn = drawOne(drawn);
+	}
+
 	return {
 		...drawn,
-		pendingDiscards: Math.max(0, drawn.hand.length - HAND_CAP)
+		pendingDiscards: Math.max(0, drawn.hand.length - handCap(run))
 	};
 }
 
@@ -88,6 +98,7 @@ export function discardCard(run: RunState, handIndex: number): RunState {
 
 export function vent(run: RunState, handIndex: number): RunState {
 	if (run.pendingDiscards > 0 || run.status !== 'active') return run;
+	if (run.pendingDraft || run.pendingTransition) return run;
 	const card = run.hand[handIndex];
 	if (card === undefined) return run;
 
@@ -95,13 +106,14 @@ export function vent(run: RunState, handIndex: number): RunState {
 		...run,
 		hand: run.hand.filter((_, index) => index !== handIndex),
 		discard: [...run.discard, card],
-		pressure: Math.max(run.sectorFloor, run.pressure - 15),
+		pressure: Math.max(run.sectorFloor, run.pressure - ventAmount(run)),
 		ventsThisContract: run.ventsThisContract + 1
 	});
 }
 
 export function scrap(run: RunState, cell: number): RunState {
 	if (run.scrapsUsed >= 1 || run.status !== 'active') return run;
+	if (run.pendingDraft || run.pendingTransition) return run;
 	if (!run.grid[cell]) return run;
 
 	const grid = [...run.grid];

@@ -1,8 +1,12 @@
 import { derived, get, writable } from 'svelte/store';
-import { contractById } from '../data/contracts';
 import { ELEMENTS } from '../data/elements';
 import { RECIPES } from '../data/recipes';
 import type { RunState, SaveState } from '../types';
+import {
+	chooseDraft as chooseDraftFromEngine,
+	deliver as deliverTile,
+	nextSector as nextSectorFromEngine
+} from '../game/contracts';
 import { placeCard } from '../game/fusion';
 import {
 	discardCard as discardCardFromHand,
@@ -36,59 +40,80 @@ export function initGame(overrides: Partial<SaveState> = {}): void {
 	saveGame(state);
 }
 
+function commit(nextRun: RunState): void {
+	save.update((state) => {
+		const previous = state.run;
+		const researchGain = Math.max(0, nextRun.researchEarned - (previous?.researchEarned ?? 0));
+		const meta = {
+			...state.meta,
+			research: state.meta.research + researchGain,
+			stats: { ...state.meta.stats }
+		};
+
+		if (nextRun.status === 'victory' && previous?.status !== 'victory') {
+			meta.stats.wins += 1;
+			meta.stats.bestSector = 3;
+		} else if (nextRun.status === 'meltdown' && previous?.status !== 'meltdown') {
+			meta.stats.bestSector = Math.max(meta.stats.bestSector, nextRun.sector);
+		}
+
+		return { ...state, run: nextRun, meta };
+	});
+}
+
 export function place(handIndex: number, cell: number): void {
 	const current = get(run);
 	if (!current) return;
-	const next = placeCard(current, handIndex, cell, ELEMENTS, RECIPES);
-	save.update((state) => ({ ...state, run: next }));
+	commit(placeCard(current, handIndex, cell, ELEMENTS, RECIPES));
 }
 
 export function vent(handIndex: number): void {
 	const current = get(run);
 	if (!current) return;
-	save.update((state) => ({ ...state, run: ventReactor(current, handIndex) }));
+	commit(ventReactor(current, handIndex));
 }
 
 export function discardCard(handIndex: number): void {
 	const current = get(run);
 	if (!current) return;
-	save.update((state) => ({ ...state, run: discardCardFromHand(current, handIndex) }));
+	commit(discardCardFromHand(current, handIndex));
 }
 
 export function scrap(cell: number): void {
 	const current = get(run);
 	if (!current) return;
-	save.update((state) => ({ ...state, run: scrapTile(current, cell) }));
+	commit(scrapTile(current, cell));
 }
 
 export function deliver(cell: number): void {
 	const current = get(run);
 	if (!current) return;
+	commit(deliverTile(current, cell));
+}
 
-	const contract = contractById(current.contractId);
-	if (current.grid[cell] !== contract.target) return;
-	if (current.delivered >= contract.count) return;
+export function chooseDraft(index: number): void {
+	const current = get(run);
+	if (!current) return;
+	commit(chooseDraftFromEngine(current, index));
+}
 
-	const grid = [...current.grid];
-	grid[cell] = null;
-	const next: RunState = {
-		...current,
-		grid,
-		delivered: current.delivered + 1,
-		deliveredTargets: [...current.deliveredTargets, contract.target]
-	};
-
-	save.update((state) => ({ ...state, run: next }));
+export function nextSector(): void {
+	const current = get(run);
+	if (!current) return;
+	commit(nextSectorFromEngine(current));
 }
 
 export function newRun(): void {
+	const current = get(save);
 	const fresh = createInitialSave();
 	save.set({
 		...fresh,
 		meta: {
-			...fresh.meta,
-			stats: { ...get(save).meta.stats, runs: get(save).meta.stats.runs + 1 }
-		}
+			...current.meta,
+			stats: { ...current.meta.stats, runs: current.meta.stats.runs + 1 }
+		},
+		settings: current.settings,
+		introSeen: current.introSeen
 	});
 	saveGame(get(save));
 }

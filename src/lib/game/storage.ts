@@ -36,7 +36,19 @@ export function parseSave(raw: string): SaveState | null {
 	if (save.meta && typeof save.meta.research !== 'number') return null;
 	if (!save.settings || typeof save.settings.sound !== 'boolean') return null;
 
-	return save as SaveState;
+	const base = createInitialSave();
+	const run =
+		save.run && typeof save.run === 'object'
+			? { ...createRun(save.run.seed ?? 42), ...save.run }
+			: null;
+
+	return {
+		...base,
+		...save,
+		run,
+		meta: { ...base.meta, ...(save.meta ?? {}) },
+		settings: { ...base.settings, ...(save.settings ?? {}) }
+	} as SaveState;
 }
 
 export function loadSave(storage: Storage = defaultStorage()): {

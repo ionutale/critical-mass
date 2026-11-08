@@ -50,6 +50,13 @@ export interface ModuleRecord {
 	effect: ModuleEffect;
 }
 
+export interface PatchRecord {
+	id: string;
+	name: string;
+	description: string;
+	effect: ModuleEffect;
+}
+
 export interface UnlockRecord {
 	id: string;
 	name: string;
@@ -89,7 +96,14 @@ export interface RunState {
 	maxChain: number;
 	deliveredTargets: string[];
 	pendingDraft: DraftOption[] | null;
+	pendingDraftKind: 'contract' | 'sector' | null;
 	pendingTransition: boolean;
+	patches: string[];
+	researchEarned: number;
+	contractMaxChain: number;
+	contractReduction: number;
+	meltdownSaves: number;
+	sectorShield: number;
 	status: RunStatus;
 }
 

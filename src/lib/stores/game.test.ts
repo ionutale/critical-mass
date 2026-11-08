@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { emptyGrid, runFixture } from '../test/fixtures';
-import { deliver, initGame, place, run, SAVE_KEY } from './game';
+import { emptyGrid, metaFixture, runFixture } from '../test/fixtures';
+import { chooseDraft, deliver, initGame, place, run, save, SAVE_KEY } from './game';
 
 beforeEach(() => {
 	window.localStorage.clear();
@@ -30,6 +30,35 @@ describe('game store', () => {
 
 		expect(get(run)!.delivered).toBe(1);
 		expect(get(run)!.grid[0]).toBeNull();
+	});
+
+	it('awards research and resumes after a draft pick', () => {
+		const grid = emptyGrid();
+		grid[0] = 'He';
+		initGame({ run: runFixture({ grid }), meta: metaFixture({ research: 0 }) });
+
+		deliver(0);
+		expect(get(save).meta.research).toBe(1);
+		expect(get(run)!.pendingDraft).not.toBeNull();
+
+		chooseDraft(0);
+		expect(get(run)!.pendingDraft).toBeNull();
+		expect(get(run)!.contractsCompleted).toBe(1);
+		expect(JSON.parse(window.localStorage.getItem(SAVE_KEY)!).meta.research).toBe(1);
+	});
+
+	it('keeps awarded research after a meltdown', () => {
+		const grid = emptyGrid();
+		grid[12] = 'H';
+		initGame({
+			run: runFixture({ grid, hand: ['H'], pressure: 99, researchEarned: 1 }),
+			meta: metaFixture({ research: 1 })
+		});
+
+		place(0, 13);
+
+		expect(get(run)!.status).toBe('meltdown');
+		expect(get(save).meta.research).toBe(1);
 	});
 
 	it('restores a saved run', () => {

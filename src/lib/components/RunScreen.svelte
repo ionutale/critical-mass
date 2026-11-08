@@ -1,12 +1,28 @@
 <script lang="ts">
 	import { contractById } from '../data/contracts';
 	import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../data/elements';
+	import { MODULE_BY_ID } from '../data/modules';
+	import { PATCH_BY_ID } from '../data/patches';
 	import { RECIPES } from '../data/recipes';
+	import { contractCount, ventAmount } from '../game/effects';
 	import { previewPlacement, type PlacementPreview } from '../game/fusion';
-	import { deliver, discardCard, place, run, scrap, vent } from '../stores/game';
+	import {
+		chooseDraft,
+		deliver,
+		discardCard,
+		newRun,
+		nextSector,
+		place,
+		run,
+		scrap,
+		vent
+	} from '../stores/game';
 	import CardPicker from './CardPicker.svelte';
+	import DraftOverlay from './DraftOverlay.svelte';
+	import EndScreen from './EndScreen.svelte';
 	import PressureGauge from './PressureGauge.svelte';
 	import PreviewOverlay from './PreviewOverlay.svelte';
+	import SectorTransition from './SectorTransition.svelte';
 
 	let selected = $state<number | null>(null);
 	let targetCell = $state<number | null>(null);
@@ -18,12 +34,25 @@
 	const targetName = $derived(
 		contract ? (ELEMENT_BY_SYMBOL.get(contract.target)?.name ?? contract.target) : ''
 	);
+	const count = $derived($run ? contractCount($run) : 0);
 	const deliverCell = $derived(
 		$run && contract ? $run.grid.findIndex((tile) => tile === contract.target) : -1
 	);
-	const complete = $derived(Boolean($run && contract && $run.delivered >= contract.count));
+	const complete = $derived(Boolean($run && contract && $run.delivered >= count));
+	const locked = $derived(
+		Boolean($run && ($run.pendingDraft || $run.pendingTransition || $run.status !== 'active'))
+	);
+
+	function modifierLabel(modifier: string): string {
+		if (modifier === 'one-chain') return 'finish in chains of 2 or more';
+		if (modifier === 'no-vent') return 'without venting';
+		if (modifier === 'pressure-50') return 'at 50+ pressure';
+		if (modifier === 'two-targets') return 'deliver two different targets';
+		return modifier;
+	}
 
 	function chooseCell(cell: number): void {
+		if (locked) return;
 		if (scrapping) {
 			scrap(cell);
 			scrapping = false;
@@ -37,7 +66,7 @@
 	}
 
 	function confirm(): void {
-		if (selected === null || targetCell === null) return;
+		if (locked || selected === null || targetCell === null) return;
 		place(selected, targetCell);
 		selected = null;
 		targetCell = null;
@@ -54,8 +83,9 @@
 	<main class="app">
 		<header class="top">
 			<div>
-				<p class="kicker mono">SECTOR {contract.sector} // CONTRACT {contract.slot}</p>
+				<p class="kicker mono">SECTOR {contract.sector} // CONTRACT {contract.slot}/5</p>
 				<h1>CRITICAL MASS</h1>
+				<p class="research mono">RESEARCH +{$run.researchEarned}</p>
 			</div>
 			<PressureGauge value={$run.pressure} cap={$run.pressureCap} />
 		</header>
@@ -64,9 +94,12 @@
 			<div>
 				<p class="label mono">DELIVER</p>
 				<p class="target">
-					{contract.count} × {targetName}
-					<span class="progress mono">{$run.delivered} / {contract.count}</span>
+					{count} × {targetName}
+					<span class="progress mono">{$run.delivered} / {count}</span>
 				</p>
+				{#if contract.modifier}
+					<p class="modifier">BONUS: {modifierLabel(contract.modifier)}</p>
+				{/if}
 				<p class="brief">“{contract.brief}”</p>
 			</div>
 			{#if complete}
@@ -75,7 +108,7 @@
 				<button
 					type="button"
 					class="deliver"
-					disabled={deliverCell < 0}
+					disabled={deliverCell < 0 || locked}
 					onclick={() => deliver(deliverCell)}
 				>
 					Deliver {targetName}
@@ -91,6 +124,7 @@
 					class:filled={!!tile}
 					class:target={tile === contract.target}
 					aria-label={`cell ${index}`}
+					disabled={locked}
 					onclick={() => chooseCell(index)}
 				>
 					{#if tile}
@@ -106,20 +140,31 @@
 		<div class="actions">
 			<button
 				type="button"
-				disabled={$run.hand.length === 0 || $run.status !== 'active'}
+				disabled={$run.hand.length === 0 || locked}
 				onclick={() => (ventOpen = true)}
 			>
-				Vent −15
+				Vent −{ventAmount($run)}
 			</button>
 			<button
 				type="button"
 				class:active={scrapping}
-				disabled={$run.scrapsUsed >= 1 || $run.status !== 'active'}
+				disabled={$run.scrapsUsed >= 1 || locked}
 				onclick={() => (scrapping = !scrapping)}
 			>
 				{scrapping ? 'Cancel scrap' : 'Scrap tile'}
 			</button>
 		</div>
+
+		{#if $run.modules.length > 0 || $run.patches.length > 0}
+			<section class="modules" aria-label="Reactor modules">
+				{#each $run.modules as id (id)}
+					<span class="module">{MODULE_BY_ID.get(id)?.name ?? id}</span>
+				{/each}
+				{#each $run.patches as id (id)}
+					<span class="module patch">{PATCH_BY_ID.get(id)?.name ?? id}</span>
+				{/each}
+			</section>
+		{/if}
 
 		<section class="hand" aria-label="Hand">
 			<p class="label mono">HAND // {$run.hand.length}</p>
@@ -131,6 +176,7 @@
 						class:selected={selected === index}
 						aria-pressed={selected === index}
 						aria-label={`${ELEMENT_BY_SYMBOL.get(card)?.name ?? card} card ${index + 1}`}
+						disabled={locked}
 						onclick={() => (selected = selected === index ? null : index)}
 					>
 						<span class="card-symbol">{card}</span>
@@ -139,17 +185,23 @@
 				{/each}
 			</div>
 		</section>
-
-		{#if $run.status === 'meltdown'}
-			<p class="meltdown" role="alert">MELTDOWN. The reactor is now a very expensive puddle.</p>
-		{/if}
 	</main>
 
 	{#if preview && selected !== null}
 		<PreviewOverlay {preview} onConfirm={confirm} onCancel={cancel} />
 	{/if}
 
-	{#if $run.pendingDiscards > 0}
+	{#if $run.pendingDraft}
+		<DraftOverlay
+			options={$run.pendingDraft}
+			kind={$run.pendingDraftKind ?? 'contract'}
+			onPick={chooseDraft}
+		/>
+	{:else if $run.pendingTransition}
+		<SectorTransition sector={$run.sector} onEnter={nextSector} />
+	{:else if $run.status === 'meltdown' || $run.status === 'victory'}
+		<EndScreen status={$run.status} run={$run} onNewRun={newRun} />
+	{:else if $run.pendingDiscards > 0}
 		<CardPicker
 			title="Discard down to seven"
 			description="The hand is over capacity. Choose a card to lose."
@@ -191,6 +243,13 @@
 		letter-spacing: 0.02em;
 	}
 
+	.research {
+		margin: 3px 0 0;
+		font-size: 9px;
+		letter-spacing: 0.14em;
+		color: var(--lime);
+	}
+
 	.contract {
 		display: flex;
 		align-items: center;
@@ -229,6 +288,14 @@
 		font-size: 10px;
 		font-style: italic;
 		color: var(--muted);
+	}
+
+	.modifier {
+		margin: 4px 0 0;
+		font-size: 9px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		color: var(--lime);
 	}
 
 	.deliver {
@@ -341,6 +408,28 @@
 		cursor: not-allowed;
 	}
 
+	.modules {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 5px;
+		margin-bottom: 8px;
+	}
+
+	.module {
+		padding: 3px 7px;
+		font-size: 9px;
+		color: var(--lime);
+		background: rgba(182, 255, 92, 0.07);
+		border: 1px solid rgba(182, 255, 92, 0.25);
+		border-radius: 999px;
+	}
+
+	.module.patch {
+		color: var(--amber);
+		background: rgba(255, 179, 71, 0.07);
+		border-color: rgba(255, 179, 71, 0.25);
+	}
+
 	.hand {
 		padding: 10px 12px 12px;
 		background: var(--panel);
@@ -384,14 +473,5 @@
 	.card-name {
 		font-size: 7px;
 		color: var(--muted);
-	}
-
-	.meltdown {
-		margin: 10px 0 0;
-		padding: 8px;
-		font-size: 11px;
-		color: var(--danger);
-		border: 1px solid rgba(255, 91, 110, 0.4);
-		border-radius: 6px;
 	}
 </style>
