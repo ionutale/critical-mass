@@ -17,7 +17,8 @@ describe('game store', () => {
 		expect(after.grid[13]).toBe('He');
 		expect(after.grid[12]).toBeNull();
 		expect(after.pressure).toBe(5);
-		expect(after.hand.length).toBe(before.hand.length - 1);
+		expect(after.hand.length).toBe(before.hand.length);
+		expect(after.discard).toContain(before.hand[0]);
 		expect(JSON.parse(window.localStorage.getItem(SAVE_KEY)!).run.grid[13]).toBe('He');
 	});
 

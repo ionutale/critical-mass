@@ -18,7 +18,8 @@
 		"test": "pnpm run test:unit",
 		"test:e2e": "pnpm build && playwright test",
 		"lint": "prettier --check . && eslint .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"validate": "vite-node scripts/validate-content.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

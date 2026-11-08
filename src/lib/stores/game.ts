@@ -4,6 +4,11 @@ import { ELEMENTS } from '../data/elements';
 import { RECIPES } from '../data/recipes';
 import type { RunState, SaveState } from '../types';
 import { placeCard } from '../game/fusion';
+import {
+	discardCard as discardCardFromHand,
+	scrap as scrapTile,
+	vent as ventReactor
+} from '../game/turn';
 import { createInitialSave, loadSave, saveGame, SAVE_KEY } from '../game/storage';
 
 export { SAVE_KEY };
@@ -36,6 +41,24 @@ export function place(handIndex: number, cell: number): void {
 	if (!current) return;
 	const next = placeCard(current, handIndex, cell, ELEMENTS, RECIPES);
 	save.update((state) => ({ ...state, run: next }));
+}
+
+export function vent(handIndex: number): void {
+	const current = get(run);
+	if (!current) return;
+	save.update((state) => ({ ...state, run: ventReactor(current, handIndex) }));
+}
+
+export function discardCard(handIndex: number): void {
+	const current = get(run);
+	if (!current) return;
+	save.update((state) => ({ ...state, run: discardCardFromHand(current, handIndex) }));
+}
+
+export function scrap(cell: number): void {
+	const current = get(run);
+	if (!current) return;
+	save.update((state) => ({ ...state, run: scrapTile(current, cell) }));
 }
 
 export function deliver(cell: number): void {

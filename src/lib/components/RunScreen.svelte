@@ -3,13 +3,16 @@
 	import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../data/elements';
 	import { RECIPES } from '../data/recipes';
 	import { previewPlacement, type PlacementPreview } from '../game/fusion';
-	import { deliver, place, run } from '../stores/game';
+	import { deliver, discardCard, place, run, scrap, vent } from '../stores/game';
+	import CardPicker from './CardPicker.svelte';
 	import PressureGauge from './PressureGauge.svelte';
 	import PreviewOverlay from './PreviewOverlay.svelte';
 
 	let selected = $state<number | null>(null);
 	let targetCell = $state<number | null>(null);
 	let preview = $state<PlacementPreview | null>(null);
+	let ventOpen = $state(false);
+	let scrapping = $state(false);
 
 	const contract = $derived($run ? contractById($run.contractId) : null);
 	const targetName = $derived(
@@ -21,6 +24,11 @@
 	const complete = $derived(Boolean($run && contract && $run.delivered >= contract.count));
 
 	function chooseCell(cell: number): void {
+		if (scrapping) {
+			scrap(cell);
+			scrapping = false;
+			return;
+		}
 		if (selected === null || !$run) return;
 		const result = previewPlacement($run, selected, cell, ELEMENTS, RECIPES);
 		if (!result) return;
@@ -95,6 +103,24 @@
 			{/each}
 		</section>
 
+		<div class="actions">
+			<button
+				type="button"
+				disabled={$run.hand.length === 0 || $run.status !== 'active'}
+				onclick={() => (ventOpen = true)}
+			>
+				Vent −15
+			</button>
+			<button
+				type="button"
+				class:active={scrapping}
+				disabled={$run.scrapsUsed >= 1 || $run.status !== 'active'}
+				onclick={() => (scrapping = !scrapping)}
+			>
+				{scrapping ? 'Cancel scrap' : 'Scrap tile'}
+			</button>
+		</div>
+
 		<section class="hand" aria-label="Hand">
 			<p class="label mono">HAND // {$run.hand.length}</p>
 			<div class="cards">
@@ -121,6 +147,26 @@
 
 	{#if preview && selected !== null}
 		<PreviewOverlay {preview} onConfirm={confirm} onCancel={cancel} />
+	{/if}
+
+	{#if $run.pendingDiscards > 0}
+		<CardPicker
+			title="Discard down to seven"
+			description="The hand is over capacity. Choose a card to lose."
+			cards={$run.hand}
+			onPick={(index) => discardCard(index)}
+		/>
+	{:else if ventOpen}
+		<CardPicker
+			title="Vent pressure"
+			description="Venting costs one card. It cannot go below the sector floor."
+			cards={$run.hand}
+			onPick={(index) => {
+				vent(index);
+				ventOpen = false;
+			}}
+			onCancel={() => (ventOpen = false)}
+		/>
 	{/if}
 {/if}
 
@@ -265,6 +311,34 @@
 
 	.void {
 		color: rgba(143, 163, 194, 0.25);
+	}
+
+	.actions {
+		display: flex;
+		gap: 8px;
+		margin-bottom: 8px;
+	}
+
+	.actions button {
+		flex: 1;
+		min-height: 38px;
+		font-size: 12px;
+		font-weight: 700;
+		color: var(--muted);
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+	}
+
+	.actions button.active {
+		color: var(--void);
+		background: var(--amber);
+		border-color: var(--amber);
+	}
+
+	.actions button:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
 	}
 
 	.hand {

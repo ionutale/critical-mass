@@ -45,4 +45,29 @@ describe('run screen', () => {
 		render(RunScreen);
 		expect(screen.getByRole('button', { name: /cell 12/i })).toHaveTextContent('H');
 	});
+
+	it('vents pressure by discarding a card', async () => {
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /cell 13/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+		expect(screen.getByLabelText(/pressure 5 of 100/i)).toBeInTheDocument();
+
+		await fireEvent.click(screen.getByRole('button', { name: /vent/i }));
+		expect(screen.getByRole('dialog', { name: /vent pressure/i })).toBeInTheDocument();
+		await fireEvent.click(screen.getByRole('button', { name: /discard hydrogen 1/i }));
+
+		expect(screen.getByLabelText(/pressure 0 of 100/i)).toBeInTheDocument();
+	});
+
+	it('scraps one tile per turn', async () => {
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /scrap tile/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /cell 12/i }));
+
+		expect(screen.getByRole('button', { name: /cell 12/i })).toHaveTextContent('·');
+		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
+	});
 });

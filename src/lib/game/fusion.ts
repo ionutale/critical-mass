@@ -1,4 +1,5 @@
 import type { ElementRecord, RecipeRecord, RunState } from '../types';
+import { endTurn } from './turn';
 
 export interface FusionStep {
 	step: number;
@@ -122,14 +123,15 @@ export function placeCard(
 	const card = run.hand[handIndex];
 	const hand = run.hand.filter((_, index) => index !== handIndex);
 
-	return {
+	const next: RunState = {
 		...run,
 		grid: preview.grid,
 		hand,
 		discard: [...run.discard, card],
 		pressure: preview.pressureAfter,
-		turn: run.turn + 1,
 		maxChain: Math.max(run.maxChain, preview.steps.length),
 		status: preview.meltdown ? 'meltdown' : 'active'
 	};
+
+	return next.status === 'meltdown' ? next : endTurn(next);
 }
