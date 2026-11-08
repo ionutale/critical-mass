@@ -4,6 +4,7 @@ import { ELEMENTS } from './elements';
 import { MODULES } from './modules';
 import { PATCHES } from './patches';
 import { RECIPES } from './recipes';
+import { UNLOCKS } from './unlocks';
 import { validateContent } from '../game/validate';
 
 describe('content', () => {
@@ -19,19 +20,27 @@ describe('content', () => {
 		}
 	});
 
-	it('has a full module and patch pool', () => {
+	it('has a full module, patch, and unlock pool', () => {
 		expect(MODULES).toHaveLength(24);
 		expect(new Set(MODULES.map((module) => module.id)).size).toBe(24);
 		expect(PATCHES).toHaveLength(6);
+		expect(UNLOCKS).toHaveLength(12);
+		expect(new Set(UNLOCKS.map((unlock) => unlock.id)).size).toBe(12);
 	});
 
 	it('validates the whole contract ladder', () => {
-		expect(validateContent({ elements: ELEMENTS, recipes: RECIPES, contracts: CONTRACTS })).toEqual(
-			{
-				ok: true,
-				errors: []
-			}
-		);
+		expect(
+			validateContent({
+				elements: ELEMENTS,
+				recipes: RECIPES,
+				contracts: CONTRACTS,
+				modules: MODULES,
+				unlocks: UNLOCKS
+			})
+		).toEqual({
+			ok: true,
+			errors: []
+		});
 	});
 
 	it('keeps the first contract as the teaching contract', () => {

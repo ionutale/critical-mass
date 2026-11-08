@@ -2,6 +2,7 @@ import { contractById, contractsForSlot } from '../data/contracts';
 import { ELEMENTS } from '../data/elements';
 import { MODULES } from '../data/modules';
 import { PATCHES } from '../data/patches';
+import { LOCKED_MODULE_IDS, UNLOCKS } from '../data/unlocks';
 import type { ContractTemplate, DraftOption, RunState } from '../types';
 import { applyEffect, contractCount, deliveryAmount, draftSize } from './effects';
 import { pickIndex } from './rng';
@@ -48,10 +49,26 @@ export function researchFor(run: RunState): number {
 	return run.researchEarned;
 }
 
-function cardElementPool(sector: 1 | 2 | 3): string[] {
-	const maxTier = sector === 1 ? 7 : 14;
-	return ELEMENTS.filter((element) => !element.heavy && element.tier <= maxTier).map(
-		(element) => element.symbol
+const BASE_CARD_SYMBOLS = ['H', 'He', 'Be'];
+
+function cardElementPool(sector: 1 | 2 | 3, unlocked: readonly string[]): string[] {
+	if (sector !== 1) {
+		return ELEMENTS.filter((element) => !element.heavy && element.tier <= 14).map(
+			(element) => element.symbol
+		);
+	}
+
+	const extra = UNLOCKS.filter(
+		(unlock) => unlock.kind === 'card' && unlocked.includes(unlock.id)
+	).map((unlock) => unlock.ref);
+
+	return [...new Set([...BASE_CARD_SYMBOLS, ...extra])];
+}
+
+function moduleAvailable(moduleId: string, unlocked: readonly string[]): boolean {
+	if (!LOCKED_MODULE_IDS.has(moduleId)) return true;
+	return UNLOCKS.some(
+		(unlock) => unlock.kind !== 'card' && unlock.ref === moduleId && unlocked.includes(unlock.id)
 	);
 }
 
@@ -65,7 +82,8 @@ function sameOption(a: DraftOption, b: DraftOption): boolean {
 
 export function generateDraft(
 	run: RunState,
-	kind: 'contract' | 'sector' = 'contract'
+	kind: 'contract' | 'sector' = 'contract',
+	unlocked: readonly string[] = []
 ): { options: DraftOption[]; state: number } {
 	const size = draftSize(run);
 	let state = run.rngState;
@@ -73,7 +91,9 @@ export function generateDraft(
 	if (kind === 'sector') {
 		const available = MODULES.filter(
 			(module) =>
-				!run.modules.includes(module.id) && !(module.effect === 'catalyst' && run.hasCatalyst)
+				moduleAvailable(module.id, unlocked) &&
+				!run.modules.includes(module.id) &&
+				!(module.effect === 'catalyst' && run.hasCatalyst)
 		);
 		const pool = available.length >= size ? available : MODULES;
 		const options: DraftOption[] = [];
@@ -89,14 +109,16 @@ export function generateDraft(
 		return { options, state };
 	}
 
-	const cards = cardElementPool(run.sector).map<DraftOption>((element) => ({
+	const cards = cardElementPool(run.sector, unlocked).map<DraftOption>((element) => ({
 		kind: 'cards',
 		element,
 		count: 2
 	}));
 	const modules = MODULES.filter(
 		(module) =>
-			!run.modules.includes(module.id) && !(module.effect === 'catalyst' && run.hasCatalyst)
+			moduleAvailable(module.id, unlocked) &&
+			!run.modules.includes(module.id) &&
+			!(module.effect === 'catalyst' && run.hasCatalyst)
 	).map<DraftOption>((module) => ({ kind: 'module', moduleId: module.id }));
 	const patches = PATCHES.filter((patch) => !run.patches.includes(patch.id)).map<DraftOption>(
 		(patch) => ({ kind: 'patch', patchId: patch.id })
@@ -145,7 +167,7 @@ function startContract(run: RunState, sector: 1 | 2 | 3, slot: 1 | 2 | 3 | 4 | 5
 	};
 }
 
-export function deliver(run: RunState, cell: number): RunState {
+export function deliver(run: RunState, cell: number, unlocked: readonly string[] = []): RunState {
 	if (run.status !== 'active' || run.pendingDraft || run.pendingTransition) return run;
 
 	const contract = activeContract(run);
@@ -166,7 +188,7 @@ export function deliver(run: RunState, cell: number): RunState {
 
 	if (delivered < count) return next;
 
-	const draft = generateDraft(next, 'contract');
+	const draft = generateDraft(next, 'contract', unlocked);
 	return {
 		...next,
 		researchEarned: next.researchEarned + researchForContract(next, contract),
@@ -227,7 +249,7 @@ export function chooseDraft(run: RunState, index: number): RunState {
 	return applyDraftOption(next, option);
 }
 
-export function nextSector(run: RunState): RunState {
+export function nextSector(run: RunState, unlocked: readonly string[] = []): RunState {
 	if (!run.pendingTransition || run.status !== 'active' || run.sector >= 3) return run;
 
 	const sector = (run.sector + 1) as 2 | 3;
@@ -248,7 +270,7 @@ export function nextSector(run: RunState): RunState {
 		1
 	);
 
-	const draft = generateDraft(transitioned, 'sector');
+	const draft = generateDraft(transitioned, 'sector', unlocked);
 	return {
 		...transitioned,
 		pendingDraft: draft.options,

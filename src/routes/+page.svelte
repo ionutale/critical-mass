@@ -1,11 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import RunScreen from '../lib/components/RunScreen.svelte';
-	import { initGame } from '../lib/stores/game';
-
-	onMount(() => {
-		initGame();
-	});
+	import App from '../lib/components/App.svelte';
 </script>
 
-<RunScreen />
+<App />

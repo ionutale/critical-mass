@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyGrid, runFixture } from '../test/fixtures';
+import { LOCKED_MODULE_IDS, UNLOCKS } from '../data/unlocks';
 import { activeContract, chooseDraft, deliver, generateDraft, nextSector } from './contracts';
 
 describe('contract ladder', () => {
@@ -151,5 +152,37 @@ describe('contract ladder', () => {
 				expect(option.element).not.toBe('U');
 			}
 		}
+	});
+
+	it('keeps meta-locked cards and modules out until their research is owned', () => {
+		const base = runFixture();
+		const baseCards = new Set<string>();
+		const baseModules = new Set<string>();
+
+		for (let rngState = 1; rngState <= 80; rngState++) {
+			const draft = generateDraft({ ...base, rngState }, 'contract');
+			for (const option of draft.options) {
+				if (option.kind === 'cards') baseCards.add(option.element);
+				if (option.kind === 'module') baseModules.add(option.moduleId);
+			}
+		}
+
+		expect([...baseCards].every((symbol) => ['H', 'He', 'Be'].includes(symbol))).toBe(true);
+		expect([...baseModules].some((id) => LOCKED_MODULE_IDS.has(id))).toBe(false);
+
+		const allUnlocks = UNLOCKS.map((unlock) => unlock.id);
+		const unlockedCards = new Set<string>();
+		const unlockedModules = new Set<string>();
+
+		for (let rngState = 1; rngState <= 80; rngState++) {
+			const draft = generateDraft({ ...base, rngState }, 'contract', allUnlocks);
+			for (const option of draft.options) {
+				if (option.kind === 'cards') unlockedCards.add(option.element);
+				if (option.kind === 'module') unlockedModules.add(option.moduleId);
+			}
+		}
+
+		expect([...unlockedCards].some((symbol) => ['C', 'O', 'Ne', 'Mg'].includes(symbol))).toBe(true);
+		expect([...unlockedModules].some((id) => LOCKED_MODULE_IDS.has(id))).toBe(true);
 	});
 });

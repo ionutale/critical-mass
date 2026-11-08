@@ -1,4 +1,10 @@
-import type { ContractTemplate, ElementRecord, RecipeRecord } from '../types';
+import type {
+	ContractTemplate,
+	ElementRecord,
+	ModuleRecord,
+	RecipeRecord,
+	UnlockRecord
+} from '../types';
 
 export interface ValidationResult {
 	ok: boolean;
@@ -34,6 +40,8 @@ export function validateContent(content: {
 	elements: readonly ElementRecord[];
 	recipes: readonly RecipeRecord[];
 	contracts: readonly ContractTemplate[];
+	modules?: readonly ModuleRecord[];
+	unlocks?: readonly UnlockRecord[];
 }): ValidationResult {
 	const errors: string[] = [];
 	const symbols = new Set<string>();
@@ -125,6 +133,42 @@ export function validateContent(content: {
 				errors.push(`Sector ${sector} slot ${slot} has ${variants.length} variants instead of 2.`);
 			}
 		}
+	}
+
+	const modules = content.modules ?? [];
+	const moduleIds = new Set<string>();
+	for (const module of modules) {
+		if (moduleIds.has(module.id)) errors.push(`Duplicate module id ${module.id}.`);
+		moduleIds.add(module.id);
+		if (!module.name.trim()) errors.push(`Module ${module.id} has no name.`);
+		if (!module.description.trim()) errors.push(`Module ${module.id} has no description.`);
+	}
+	if (content.modules && modules.length !== 24) {
+		errors.push(`Expected 24 modules, found ${modules.length}.`);
+	}
+
+	const unlocks = content.unlocks ?? [];
+	const unlockIds = new Set<string>();
+	for (const unlock of unlocks) {
+		if (unlockIds.has(unlock.id)) errors.push(`Duplicate unlock id ${unlock.id}.`);
+		unlockIds.add(unlock.id);
+
+		if (!['card', 'module', 'contract'].includes(unlock.kind)) {
+			errors.push(`Unlock ${unlock.id} has an unknown kind.`);
+		}
+		if (!Number.isInteger(unlock.cost) || unlock.cost < 3 || unlock.cost > 12) {
+			errors.push(`Unlock ${unlock.id} has an out-of-range research cost.`);
+		}
+		if (unlock.kind === 'card') {
+			if (!symbols.has(unlock.ref)) {
+				errors.push(`Unlock ${unlock.id} references an unknown card ${unlock.ref}.`);
+			}
+		} else if (!moduleIds.has(unlock.ref)) {
+			errors.push(`Unlock ${unlock.id} references an unknown module ${unlock.ref}.`);
+		}
+	}
+	if (content.unlocks && unlocks.length !== 12) {
+		errors.push(`Expected 12 unlocks, found ${unlocks.length}.`);
 	}
 
 	return { ok: errors.length === 0, errors };

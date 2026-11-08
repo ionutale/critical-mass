@@ -4,6 +4,7 @@ test('fuses helium, delivers the contract, and persists after reload', async ({ 
 	await page.goto('/');
 
 	await expect(page.getByRole('heading', { name: /critical mass/i })).toBeVisible();
+	await page.getByRole('button', { name: /continue run/i }).click();
 	await expect(page.getByText('0 / 100')).toBeVisible();
 
 	await page.getByRole('button', { name: /hydrogen card 1/i }).click();
@@ -21,6 +22,7 @@ test('fuses helium, delivers the contract, and persists after reload', async ({ 
 	await expect(page.getByText(/contract 2\/5/i)).toBeVisible();
 
 	await page.reload();
+	await page.getByRole('button', { name: /continue run/i }).click();
 	await expect(page.getByText(/contract 2\/5/i)).toBeVisible();
 	await expect(page.getByText('5 / 100')).toBeVisible();
 });

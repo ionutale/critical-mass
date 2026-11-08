@@ -1,7 +1,19 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { emptyGrid, metaFixture, runFixture } from '../test/fixtures';
-import { chooseDraft, deliver, initGame, place, run, save, SAVE_KEY } from './game';
+import {
+	chooseDraft,
+	deliver,
+	initGame,
+	place,
+	resetAll,
+	resetRun,
+	run,
+	save,
+	setSetting,
+	SAVE_KEY,
+	unlock
+} from './game';
 
 beforeEach(() => {
 	window.localStorage.clear();
@@ -44,6 +56,7 @@ describe('game store', () => {
 		chooseDraft(0);
 		expect(get(run)!.pendingDraft).toBeNull();
 		expect(get(run)!.contractsCompleted).toBe(1);
+		expect(get(save).meta.stats.contracts).toBe(1);
 		expect(JSON.parse(window.localStorage.getItem(SAVE_KEY)!).meta.research).toBe(1);
 	});
 
@@ -59,6 +72,49 @@ describe('game store', () => {
 
 		expect(get(run)!.status).toBe('meltdown');
 		expect(get(save).meta.research).toBe(1);
+	});
+
+	it('spends research on an unlock and persists it', () => {
+		initGame({ meta: metaFixture({ research: 10 }) });
+
+		expect(unlock('card-carbon')).toBe(true);
+		expect(get(save).meta.research).toBe(7);
+		expect(get(save).meta.unlocks).toContain('card-carbon');
+		expect(JSON.parse(window.localStorage.getItem(SAVE_KEY)!).meta.unlocks).toContain(
+			'card-carbon'
+		);
+
+		expect(unlock('card-carbon')).toBe(false);
+		expect(get(save).meta.research).toBe(7);
+	});
+
+	it('refuses an unlock when research is short', () => {
+		initGame({ meta: metaFixture({ research: 2 }) });
+
+		expect(unlock('card-magnesium')).toBe(false);
+		expect(get(save).meta.research).toBe(2);
+		expect(get(save).meta.unlocks).toEqual([]);
+	});
+
+	it('persists settings and separates reset run from reset all', () => {
+		initGame({ meta: metaFixture({ research: 5, unlocks: ['card-carbon'] }) });
+
+		setSetting('sound', false);
+		expect(JSON.parse(window.localStorage.getItem(SAVE_KEY)!).settings.sound).toBe(false);
+		initGame();
+		expect(get(save).settings.sound).toBe(false);
+
+		resetRun();
+		expect(get(run)).toBeNull();
+		expect(get(save).meta.research).toBe(5);
+		expect(get(save).meta.unlocks).toEqual(['card-carbon']);
+
+		initGame({ meta: metaFixture({ research: 5, unlocks: ['card-carbon'] }) });
+		resetAll();
+		expect(get(run)).toBeNull();
+		expect(get(save).meta.research).toBe(0);
+		expect(get(save).meta.unlocks).toEqual([]);
+		expect(get(save).settings.sound).toBe(false);
 	});
 
 	it('restores a saved run', () => {

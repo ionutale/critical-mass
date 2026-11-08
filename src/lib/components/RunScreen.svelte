@@ -24,6 +24,12 @@
 	import PreviewOverlay from './PreviewOverlay.svelte';
 	import SectorTransition from './SectorTransition.svelte';
 
+	let {
+		onMenu
+	}: {
+		onMenu?: () => void;
+	} = $props();
+
 	let selected = $state<number | null>(null);
 	let targetCell = $state<number | null>(null);
 	let preview = $state<PlacementPreview | null>(null);
@@ -87,7 +93,12 @@
 				<h1>CRITICAL MASS</h1>
 				<p class="research mono">RESEARCH +{$run.researchEarned}</p>
 			</div>
-			<PressureGauge value={$run.pressure} cap={$run.pressureCap} />
+			<div class="top-right">
+				<PressureGauge value={$run.pressure} cap={$run.pressureCap} />
+				{#if onMenu}
+					<button class="menu" type="button" onclick={onMenu}>Menu</button>
+				{/if}
+			</div>
 		</header>
 
 		<section class="contract" aria-label="Active contract">
@@ -229,6 +240,24 @@
 		justify-content: space-between;
 		gap: 12px;
 		margin-bottom: 12px;
+	}
+
+	.top-right {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 6px;
+	}
+
+	.menu {
+		min-height: 44px;
+		padding: 5px 10px;
+		font-size: 10px;
+		font-weight: 700;
+		color: var(--muted);
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 6px;
 	}
 
 	.kicker {

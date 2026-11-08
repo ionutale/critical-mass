@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CONTRACTS } from '../data/contracts';
 import { ELEMENTS } from '../data/elements';
+import { MODULES } from '../data/modules';
 import { RECIPES } from '../data/recipes';
+import { UNLOCKS } from '../data/unlocks';
 import { validateContent } from './validate';
 
 describe('validateContent', () => {
@@ -12,6 +14,33 @@ describe('validateContent', () => {
 				errors: []
 			}
 		);
+	});
+
+	it('validates the full module and unlock pools', () => {
+		expect(
+			validateContent({
+				elements: ELEMENTS,
+				recipes: RECIPES,
+				contracts: CONTRACTS,
+				modules: MODULES,
+				unlocks: UNLOCKS
+			})
+		).toEqual({ ok: true, errors: [] });
+	});
+
+	it('rejects an unlock that references an unknown pool item', () => {
+		const broken = [
+			...UNLOCKS.slice(0, 11),
+			{ ...UNLOCKS[11], id: 'bad', ref: 'not-a-real-module' }
+		];
+		const result = validateContent({
+			elements: ELEMENTS,
+			recipes: RECIPES,
+			contracts: CONTRACTS,
+			modules: MODULES,
+			unlocks: broken
+		});
+		expect(result.ok).toBe(false);
 	});
 
 	it('rejects a recipe that does not produce a heavier element', () => {

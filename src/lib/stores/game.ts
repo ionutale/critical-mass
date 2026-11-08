@@ -1,6 +1,7 @@
 import { derived, get, writable } from 'svelte/store';
 import { ELEMENTS } from '../data/elements';
 import { RECIPES } from '../data/recipes';
+import { UNLOCKS } from '../data/unlocks';
 import type { RunState, SaveState } from '../types';
 import {
 	chooseDraft as chooseDraftFromEngine,
@@ -44,11 +45,16 @@ function commit(nextRun: RunState): void {
 	save.update((state) => {
 		const previous = state.run;
 		const researchGain = Math.max(0, nextRun.researchEarned - (previous?.researchEarned ?? 0));
+		const contractGain = Math.max(
+			0,
+			nextRun.contractsCompleted - (previous?.contractsCompleted ?? 0)
+		);
 		const meta = {
 			...state.meta,
 			research: state.meta.research + researchGain,
 			stats: { ...state.meta.stats }
 		};
+		meta.stats.contracts += contractGain;
 
 		if (nextRun.status === 'victory' && previous?.status !== 'victory') {
 			meta.stats.wins += 1;
@@ -88,7 +94,7 @@ export function scrap(cell: number): void {
 export function deliver(cell: number): void {
 	const current = get(run);
 	if (!current) return;
-	commit(deliverTile(current, cell));
+	commit(deliverTile(current, cell, get(save).meta.unlocks));
 }
 
 export function chooseDraft(index: number): void {
@@ -100,7 +106,52 @@ export function chooseDraft(index: number): void {
 export function nextSector(): void {
 	const current = get(run);
 	if (!current) return;
-	commit(nextSectorFromEngine(current));
+	commit(nextSectorFromEngine(current, get(save).meta.unlocks));
+}
+
+export function unlock(id: string): boolean {
+	const node = UNLOCKS.find((record) => record.id === id);
+	if (!node) return false;
+
+	let purchased = false;
+	save.update((state) => {
+		if (state.meta.unlocks.includes(id) || state.meta.research < node.cost) return state;
+		purchased = true;
+		return {
+			...state,
+			meta: {
+				...state.meta,
+				research: state.meta.research - node.cost,
+				unlocks: [...state.meta.unlocks, id]
+			}
+		};
+	});
+
+	return purchased;
+}
+
+export function setSetting(key: 'sound' | 'reduceMotion', value: boolean): void {
+	save.update((state) => ({
+		...state,
+		settings: { ...state.settings, [key]: value }
+	}));
+}
+
+/** Clears the active run but keeps research, unlocks, settings, and stats. */
+export function resetRun(): void {
+	save.update((state) => ({ ...state, run: null }));
+}
+
+/** Clears the run, research, unlocks, and stats but keeps the player's settings. */
+export function resetAll(): void {
+	const current = get(save);
+	const fresh = createInitialSave();
+	save.set({
+		...fresh,
+		run: null,
+		settings: current.settings,
+		introSeen: current.introSeen
+	});
 }
 
 export function newRun(): void {

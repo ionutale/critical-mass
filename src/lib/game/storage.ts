@@ -15,7 +15,7 @@ export function createInitialSave(seed = 42): SaveState {
 		meta: {
 			research: 0,
 			unlocks: [],
-			stats: { runs: 2, wins: 0, bestSector: 1, contracts: 0 }
+			stats: { runs: 0, wins: 0, bestSector: 1, contracts: 0 }
 		},
 		settings: { sound: true, reduceMotion: false },
 		introSeen: true
