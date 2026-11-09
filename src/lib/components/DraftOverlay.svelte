@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trapFocus } from '../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../data/elements';
 	import { MODULE_BY_ID } from '../data/modules';
 	import { PATCH_BY_ID } from '../data/patches';
@@ -48,7 +49,7 @@
 />
 
 <div class="backdrop">
-	<div class="draft" role="dialog" aria-modal="true" aria-labelledby="draft-title">
+	<div class="draft" role="dialog" aria-modal="true" aria-labelledby="draft-title" use:trapFocus>
 		<p class="kicker mono">{kind === 'sector' ? 'SECTOR TRANSITION' : 'CONTRACT COMPLETE'}</p>
 		<h2 id="draft-title">
 			{kind === 'sector' ? 'Choose a free module' : 'Choose one upgrade'}

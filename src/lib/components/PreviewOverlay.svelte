@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trapFocus } from '../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../data/elements';
 	import type { PlacementPreview } from '../game/fusion';
 
@@ -16,7 +17,13 @@
 </script>
 
 <div class="backdrop">
-	<div class="preview" role="dialog" aria-modal="true" aria-label="Preview">
+	<div
+		class="preview"
+		role="dialog"
+		aria-modal="true"
+		aria-label="Preview"
+		use:trapFocus={{ onEscape: onCancel }}
+	>
 		<p class="kicker">CHAIN PREVIEW</p>
 
 		{#if preview.steps.length > 0}

@@ -65,7 +65,7 @@ describe('run screen', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: /vent/i }));
 		expect(screen.getByRole('dialog', { name: /vent pressure/i })).toBeInTheDocument();
-		await fireEvent.click(screen.getByRole('button', { name: /discard hydrogen 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen, discard 1/i }));
 
 		expect(screen.getByLabelText(/pressure 0 of 100/i)).toBeInTheDocument();
 	});

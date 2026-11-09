@@ -50,6 +50,11 @@
 		$run && contract ? $run.grid.findIndex((tile) => tile === contract.target) : -1
 	);
 	const complete = $derived(Boolean($run && contract && $run.delivered >= count));
+	const announcement = $derived(
+		$run
+			? `Pressure ${$run.pressure} of ${$run.pressureCap}. ${$run.delivered} of ${count} ${targetName} delivered.`
+			: ''
+	);
 	const locked = $derived(
 		Boolean($run && ($run.pendingDraft || $run.pendingTransition || $run.status !== 'active'))
 	);
@@ -108,6 +113,8 @@
 
 {#if $run && contract}
 	<main class="app" class:shake={$run.status === 'meltdown'}>
+		<p class="visually-hidden" role="status" aria-live="polite">{announcement}</p>
+
 		<header class="top">
 			<div>
 				<p class="kicker mono">SECTOR {contract.sector} // CONTRACT {contract.slot}/5</p>
@@ -200,14 +207,15 @@
 
 		<section class="hand" aria-label="Hand">
 			<p class="label mono">HAND // {$run.hand.length}</p>
-			<div class="cards">
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+			<div class="cards" tabindex="0" role="group" aria-label="Hand cards">
 				{#each $run.hand as card, index (index)}
 					<button
 						type="button"
 						class="card"
 						class:selected={selected === index}
 						aria-pressed={selected === index}
-						aria-label={`${ELEMENT_BY_SYMBOL.get(card)?.name ?? card} card ${index + 1}`}
+						aria-label={`${card} ${ELEMENT_BY_SYMBOL.get(card)?.name ?? card} card ${index + 1}`}
 						disabled={locked}
 						onclick={() => {
 							if (selected !== index) playSound('pick');
@@ -360,7 +368,7 @@
 
 	.deliver {
 		flex-shrink: 0;
-		min-height: 38px;
+		min-height: 44px;
 		padding: 6px 9px;
 		font-size: 11px;
 		font-weight: 700;
@@ -448,7 +456,7 @@
 
 	.actions button {
 		flex: 1;
-		min-height: 38px;
+		min-height: 44px;
 		font-size: 12px;
 		font-weight: 700;
 		color: var(--muted);

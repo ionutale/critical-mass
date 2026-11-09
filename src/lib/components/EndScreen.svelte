@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trapFocus } from '../actions/trapFocus';
 	import type { RunState } from '../types';
 
 	let {
@@ -18,6 +19,7 @@
 		role={status === 'meltdown' ? 'alert' : 'dialog'}
 		aria-modal="true"
 		aria-labelledby="end-title"
+		use:trapFocus
 	>
 		<p class="kicker mono">{status === 'meltdown' ? 'REACTOR LOST' : 'RUN COMPLETE'}</p>
 		<h2 id="end-title">{status === 'meltdown' ? 'Meltdown' : 'Victory'}</h2>

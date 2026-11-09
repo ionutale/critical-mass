@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { trapFocus } from '../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../data/elements';
 
 	let {
@@ -17,7 +18,13 @@
 </script>
 
 <div class="backdrop">
-	<div class="picker" role="dialog" aria-modal="true" aria-label={title}>
+	<div
+		class="picker"
+		role="dialog"
+		aria-modal="true"
+		aria-label={title}
+		use:trapFocus={{ onEscape: () => onCancel?.() }}
+	>
 		<p class="kicker">REACTOR CONTROL</p>
 		<h2>{title}</h2>
 		<p class="copy">{description}</p>
@@ -26,7 +33,7 @@
 			{#each cards as card, index (index)}
 				<button
 					type="button"
-					aria-label={`Discard ${ELEMENT_BY_SYMBOL.get(card)?.name ?? card} ${index + 1}`}
+					aria-label={`${card} ${ELEMENT_BY_SYMBOL.get(card)?.name ?? card}, discard ${index + 1}`}
 					onclick={() => onPick(index)}
 				>
 					<span class="symbol">{card}</span>
