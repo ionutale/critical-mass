@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { initGame, newRun, run, save } from '../stores/game';
+	import { setSoundEnabled } from '../game/sound';
+	import { reducedMotion } from '../stores/motion';
 	import HowToPlay from './HowToPlay.svelte';
 	import ResearchLab from './ResearchLab.svelte';
 	import RunScreen from './RunScreen.svelte';
@@ -15,7 +17,9 @@
 		initGame();
 	});
 
-	const reduceMotion = $derived($save.settings.reduceMotion);
+	$effect(() => {
+		setSoundEnabled($save.settings.sound);
+	});
 
 	function startNewRun(): void {
 		newRun();
@@ -23,7 +27,7 @@
 	}
 </script>
 
-<div class="app-root" class:reduce-motion={reduceMotion}>
+<div class="app-root" class:reduce-motion={$reducedMotion}>
 	{#if view === 'run' && $run}
 		<RunScreen onMenu={() => (view = 'title')} />
 	{:else if view === 'research'}

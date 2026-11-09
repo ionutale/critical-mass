@@ -21,8 +21,8 @@
 
 		{#if preview.steps.length > 0}
 			<ol>
-				{#each preview.steps as step (step.step)}
-					<li>
+				{#each preview.steps as step, index (step.step)}
+					<li class="chain-step" style:animation-delay={`${index * 90}ms`}>
 						<span>{ELEMENT_BY_SYMBOL.get(step.a)?.name ?? step.a}</span>
 						<span class="op">+</span>
 						<span>{ELEMENT_BY_SYMBOL.get(step.b)?.name ?? step.b}</span>
@@ -70,6 +70,38 @@
 		padding: 22px;
 		background: rgba(3, 6, 12, 0.72);
 		backdrop-filter: blur(3px);
+	}
+
+	.chain-step {
+		animation: chain-pulse 900ms ease-out both;
+	}
+
+	@keyframes chain-pulse {
+		0% {
+			opacity: 0.25;
+			transform: translateX(-6px);
+			text-shadow: none;
+		}
+		45% {
+			opacity: 1;
+			transform: translateX(0);
+			text-shadow: 0 0 12px rgba(56, 225, 255, 0.7);
+		}
+		100% {
+			opacity: 1;
+			transform: translateX(0);
+			text-shadow: none;
+		}
+	}
+
+	:global(.reduce-motion) .chain-step {
+		animation: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.chain-step {
+			animation: none;
+		}
 	}
 
 	.preview {

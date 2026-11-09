@@ -6,6 +6,8 @@
 	import { RECIPES } from '../data/recipes';
 	import { contractCount, ventAmount } from '../game/effects';
 	import { previewPlacement, type PlacementPreview } from '../game/fusion';
+	import { playSound } from '../game/sound';
+	import { reducedMotion } from '../stores/motion';
 	import {
 		chooseDraft,
 		deliver,
@@ -20,6 +22,7 @@
 	import CardPicker from './CardPicker.svelte';
 	import DraftOverlay from './DraftOverlay.svelte';
 	import EndScreen from './EndScreen.svelte';
+	import ParticleField from './ParticleField.svelte';
 	import PressureGauge from './PressureGauge.svelte';
 	import PreviewOverlay from './PreviewOverlay.svelte';
 	import SectorTransition from './SectorTransition.svelte';
@@ -35,6 +38,8 @@
 	let preview = $state<PlacementPreview | null>(null);
 	let ventOpen = $state(false);
 	let scrapping = $state(false);
+	let burst = $state(0);
+	let lastStatus = 'active';
 
 	const contract = $derived($run ? contractById($run.contractId) : null);
 	const targetName = $derived(
@@ -71,12 +76,28 @@
 		targetCell = cell;
 	}
 
+	$effect(() => {
+		const status = $run?.status;
+		if (!status || status === lastStatus) return;
+		lastStatus = status;
+		if (status === 'meltdown') playSound('meltdown');
+		if (status === 'victory') playSound('victory');
+	});
+
 	function confirm(): void {
 		if (locked || selected === null || targetCell === null) return;
+		playSound('fusion');
+		burst += 1;
 		place(selected, targetCell);
 		selected = null;
 		targetCell = null;
 		preview = null;
+	}
+
+	function handleDeliver(): void {
+		if (deliverCell < 0 || locked) return;
+		playSound('contract');
+		deliver(deliverCell);
 	}
 
 	function cancel(): void {
@@ -86,7 +107,7 @@
 </script>
 
 {#if $run && contract}
-	<main class="app">
+	<main class="app" class:shake={$run.status === 'meltdown'}>
 		<header class="top">
 			<div>
 				<p class="kicker mono">SECTOR {contract.sector} // CONTRACT {contract.slot}/5</p>
@@ -120,7 +141,7 @@
 					type="button"
 					class="deliver"
 					disabled={deliverCell < 0 || locked}
-					onclick={() => deliver(deliverCell)}
+					onclick={handleDeliver}
 				>
 					Deliver {targetName}
 				</button>
@@ -188,7 +209,10 @@
 						aria-pressed={selected === index}
 						aria-label={`${ELEMENT_BY_SYMBOL.get(card)?.name ?? card} card ${index + 1}`}
 						disabled={locked}
-						onclick={() => (selected = selected === index ? null : index)}
+						onclick={() => {
+							if (selected !== index) playSound('pick');
+							selected = selected === index ? null : index;
+						}}
 					>
 						<span class="card-symbol">{card}</span>
 						<span class="card-name">{ELEMENT_BY_SYMBOL.get(card)?.name ?? card}</span>
@@ -196,6 +220,12 @@
 				{/each}
 			</div>
 		</section>
+		<ParticleField
+			seed={$run.rngState}
+			{burst}
+			mode={$run.status === 'meltdown' ? 'meltdown' : 'fusion'}
+			reducedMotion={$reducedMotion}
+		/>
 	</main>
 
 	{#if preview && selected !== null}
@@ -225,6 +255,7 @@
 			description="Venting costs one card. It cannot go below the sector floor."
 			cards={$run.hand}
 			onPick={(index) => {
+				playSound('vent');
 				vent(index);
 				ventOpen = false;
 			}}
