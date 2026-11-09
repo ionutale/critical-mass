@@ -2,6 +2,7 @@
 	import '@fontsource-variable/space-grotesk';
 	import '@fontsource-variable/jetbrains-mono';
 	import '../lib/styles/base.css';
+	import PwaUpdate from '../lib/components/PwaUpdate.svelte';
 	import '../lib/styles/neon.css';
 	import favicon from '../lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
@@ -15,3 +16,4 @@
 </svelte:head>
 
 {@render children()}
+<PwaUpdate />
