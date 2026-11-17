@@ -7,7 +7,7 @@
 	import { PATCH_BY_ID } from '../data/patches';
 	import { RECIPES } from '../data/recipes';
 	import { contractCount, ventAmount } from '../game/effects';
-	import { previewPlacement, type PlacementPreview } from '../game/fusion';
+	import { previewPlacement, type FusionStep, type PlacementPreview } from '../game/fusion';
 	import { playSound } from '../game/sound';
 	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import {
@@ -24,6 +24,7 @@
 	import CardPicker from './CardPicker.svelte';
 	import DraftOverlay from './DraftOverlay.svelte';
 	import EndScreen from './EndScreen.svelte';
+	import FusionPlayback from './FusionPlayback.svelte';
 	import ParticleField from './ParticleField.svelte';
 	import PressureGauge from './PressureGauge.svelte';
 	import PreviewOverlay from './PreviewOverlay.svelte';
@@ -43,6 +44,34 @@
 	let scrapping = $state(false);
 	let burst = $state(0);
 	let lastStatus = 'active';
+
+	type Playback = {
+		id: number;
+		steps: FusionStep[];
+		grid: (string | null)[];
+		originCell: number;
+		onDone: () => void;
+	};
+
+	let playback = $state<Playback | null>(null);
+	let playbackId = 0;
+
+	function startPlayback(steps: FusionStep[], grid: (string | null)[], originCell: number): void {
+		const id = ++playbackId;
+		playback = {
+			id,
+			steps,
+			grid,
+			originCell,
+			onDone: () => {
+				if (playback?.id === id) playback = null;
+			}
+		};
+	}
+
+	function stopPlayback(): void {
+		playback = null;
+	}
 
 	const contract = $derived($run ? contractById($run.contractId) : null);
 	const targetName = $derived(
@@ -143,6 +172,20 @@
 		if (locked || selected === null || targetCell === null) return;
 		playSound('fusion');
 		burst += 1;
+
+		// Capture the chosen path and the pre-commit grid before place(), because
+		// the store updates immediately and the consumed tiles vanish from the
+		// board. A fresh placement replaces (cancels) any chain still playing.
+		const steps = preview?.steps ?? [];
+		const grid = $run ? [...$run.grid] : [];
+		const originCell = targetCell;
+
+		if (!$reducedMotion && steps.length > 0) {
+			startPlayback(steps, grid, originCell);
+		} else {
+			stopPlayback();
+		}
+
 		place(selected, targetCell, choices);
 		choices = [];
 		selected = null;
@@ -231,6 +274,19 @@
 					{/if}
 				</button>
 			{/each}
+
+			{#if playback}
+				{@const current = playback}
+				{#key current.id}
+					<FusionPlayback
+						steps={current.steps}
+						grid={current.grid}
+						originCell={current.originCell}
+						reducedMotion={$reducedMotion}
+						onDone={current.onDone}
+					/>
+				{/key}
+			{/if}
 		</section>
 
 		<div class="actions">

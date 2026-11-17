@@ -85,6 +85,102 @@ describe('run screen', () => {
 		).toBeInTheDocument();
 	});
 
+	it('plays a staggered ghost chain after confirming a multi-step fusion', async () => {
+		const grid = emptyGrid();
+		grid[7] = 'Be';
+		grid[13] = 'C';
+		grid[11] = 'He';
+		const fixture = runFixture({ grid, hand: ['He'] });
+		initGame({ run: fixture });
+		render(RunScreen);
+
+		const expected = previewPlacement(fixture, 0, 12, ELEMENTS, RECIPES, [1])!;
+		expect(expected.steps.length).toBeGreaterThan(1);
+
+		await fireEvent.click(screen.getByRole('button', { name: /helium card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /cell 12/i }));
+
+		const preview = screen.getByRole('dialog', { name: /preview/i });
+		const firstStep = within(preview).getByRole('group', { name: /step 1 options/i });
+		await fireEvent.click(within(firstStep).getAllByRole('button')[1]);
+		await fireEvent.click(within(preview).getByRole('button', { name: /confirm/i }));
+
+		const layer = screen.getByTestId('fusion-playback');
+		expect(layer).toHaveAttribute('aria-hidden', 'true');
+
+		const ghosts = within(layer).getAllByTestId('fusion-ghost');
+		const involved = new Set<number>([12, ...expected.steps.map((step) => step.cell)]);
+		expect(ghosts).toHaveLength(involved.size);
+		expect(new Set(ghosts.map((ghost) => Number(ghost.dataset.cell)))).toEqual(involved);
+
+		// The surviving cell pulses; consumed cells merge on a shrinking stagger so
+		// even an engine-max chain finishes inside the fixed budget.
+		const surviving = ghosts.find((ghost) => ghost.dataset.cell === '12');
+		expect(surviving).toHaveClass('surviving');
+
+		const stagger = Math.min(90, 700 / expected.steps.length);
+		expected.steps.forEach((step, index) => {
+			const ghost = ghosts.find((element) => element.dataset.cell === String(step.cell));
+			expect(ghost?.style.animationDelay).toBe(`${index * stagger}ms`);
+		});
+		expect(surviving?.style.animationDelay).toBe(`${expected.steps.length * stagger}ms`);
+	});
+
+	it('renders no ghost chain under reduced motion', async () => {
+		const grid = emptyGrid();
+		grid[7] = 'Be';
+		grid[13] = 'C';
+		grid[11] = 'He';
+		initGame({
+			run: runFixture({ grid, hand: ['He'] }),
+			settings: { sound: true, reduceMotion: true }
+		});
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /helium card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /cell 12/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+		expect(screen.queryByTestId('fusion-playback')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /cell 12/i })).toHaveTextContent('Oxygen');
+	});
+
+	it('cancels the previous playback when a new placement lands', async () => {
+		const grid = emptyGrid();
+		grid[2] = 'H';
+		grid[21] = 'H';
+		initGame({ run: runFixture({ grid, hand: ['H', 'H', 'H'] }) });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /cell 3/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+		const first = screen.getByTestId('fusion-playback');
+		expect(
+			new Set(
+				within(first)
+					.getAllByTestId('fusion-ghost')
+					.map((ghost) => Number(ghost.dataset.cell))
+			)
+		).toEqual(new Set([2, 3]));
+
+		// No input lock: the next placement is accepted while the first chain plays.
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /cell 22/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+
+		const layers = screen.getAllByTestId('fusion-playback');
+		expect(layers).toHaveLength(1);
+		expect(
+			new Set(
+				within(layers[0])
+					.getAllByTestId('fusion-ghost')
+					.map((ghost) => Number(ghost.dataset.cell))
+			)
+		).toEqual(new Set([21, 22]));
+	});
+
 	it('cancels without changing the board', async () => {
 		render(RunScreen);
 
