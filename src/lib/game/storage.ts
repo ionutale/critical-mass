@@ -3,6 +3,15 @@ import { createRun } from './turn';
 
 export const SAVE_KEY = 'critical-mass:save:v1';
 
+export function randomSeed(): number {
+	const buf = new Uint32Array(1);
+	if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+		crypto.getRandomValues(buf);
+		return buf[0];
+	}
+	return Date.now() % 0xffffffff;
+}
+
 function defaultStorage(): Storage {
 	if (typeof window !== 'undefined') return window.localStorage;
 	return globalThis.localStorage;

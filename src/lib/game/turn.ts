@@ -2,15 +2,18 @@ import type { RunState } from '../types';
 import { drawAmount, handCap, ventAmount } from './effects';
 import { shuffleWithState } from './rng';
 
-function startingDeck(): string[] {
-	return [...Array<string>(8).fill('H'), 'He', 'He'];
-}
+export const START_VARIANTS: readonly { cell: number; deck: readonly string[] }[] = [
+	{ cell: 12, deck: [...Array<string>(8).fill('H'), 'He', 'He'] },
+	{ cell: 7, deck: [...Array<string>(7).fill('H'), 'He', 'He', 'He'] },
+	{ cell: 13, deck: [...Array<string>(6).fill('H'), 'He', 'He', 'He', 'He'] }
+];
 
 export function createRun(seed: number): RunState {
+	const variant = START_VARIANTS[seed % START_VARIANTS.length];
 	const grid: (string | null)[] = Array<string | null>(25).fill(null);
-	grid[12] = 'H';
+	grid[variant.cell] = 'H';
 
-	const shuffled = shuffleWithState(startingDeck(), seed);
+	const shuffled = shuffleWithState(variant.deck, seed);
 	const hand = shuffled.items.slice(0, 5);
 	const deck = shuffled.items.slice(5);
 

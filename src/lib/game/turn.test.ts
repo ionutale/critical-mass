@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { contractsForSlot } from '../data/contracts';
 import { ELEMENTS } from '../data/elements';
 import { RECIPES } from '../data/recipes';
 import { emptyGrid, runFixture } from '../test/fixtures';
 import { placeCard } from './fusion';
-import { createRun, discardCard, endTurn, scrap, vent } from './turn';
+import { createRun, discardCard, endTurn, scrap, START_VARIANTS, vent } from './turn';
 
 describe('turn', () => {
 	it('builds a ten-card deck, draws five, and seeds the center', () => {
@@ -12,6 +13,51 @@ describe('turn', () => {
 		expect(run.deck.length + run.hand.length).toBe(10);
 		expect(run.grid[12]).toBe('H');
 		expect(run.deck).toEqual(expect.arrayContaining(['H', 'H']));
+	});
+
+	it('replays the same start for the same seed', () => {
+		const first = createRun(7);
+		const second = createRun(7);
+
+		expect(second).toEqual(first);
+		expect(second.contractId).toBe(first.contractId);
+	});
+
+	it('starts different variants for seeds that map to different entries', () => {
+		expect(START_VARIANTS.length).toBeGreaterThan(1);
+
+		const first = createRun(0);
+		const second = createRun(1);
+
+		expect(first.grid).not.toEqual(second.grid);
+		expect([...first.hand, ...first.deck].sort()).not.toEqual(
+			[...second.hand, ...second.deck].sort()
+		);
+	});
+
+	it('gives every variant a reachable sector-1 slot-1 first contract', () => {
+		const firstSlot = contractsForSlot(1, 1);
+
+		START_VARIANTS.forEach((variant, index) => {
+			const run = createRun(index);
+			const contract = firstSlot.find((candidate) => candidate.id === run.contractId);
+
+			expect(contract).toBeDefined();
+			const target = contract?.target;
+			const startTile = run.grid[variant.cell];
+			expect(startTile).not.toBeNull();
+			expect([...run.hand, ...run.deck]).toHaveLength(10);
+
+			const spare = [...run.hand, ...run.deck].some((card) =>
+				RECIPES.some(
+					(recipe) =>
+						recipe.result === target &&
+						((recipe.a === startTile && recipe.b === card) ||
+							(recipe.b === startTile && recipe.a === card))
+				)
+			);
+			expect(spare).toBe(true);
+		});
 	});
 
 	it('discards a placed card and draws back to five', () => {

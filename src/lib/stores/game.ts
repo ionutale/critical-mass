@@ -14,7 +14,7 @@ import {
 	scrap as scrapTile,
 	vent as ventReactor
 } from '../game/turn';
-import { createInitialSave, loadSave, saveGame, SAVE_KEY } from '../game/storage';
+import { createInitialSave, loadSave, randomSeed, saveGame, SAVE_KEY } from '../game/storage';
 
 export { SAVE_KEY };
 
@@ -156,7 +156,7 @@ export function resetAll(): void {
 
 export function newRun(): void {
 	const current = get(save);
-	const fresh = createInitialSave();
+	const fresh = createInitialSave(randomSeed());
 	save.set({
 		...fresh,
 		meta: {

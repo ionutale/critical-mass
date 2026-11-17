@@ -133,6 +133,7 @@
 				<p class="kicker mono">SECTOR {contract.sector} // CONTRACT {contract.slot}/5</p>
 				<h1>CRITICAL MASS</h1>
 				<p class="research mono">RESEARCH +{$run.researchEarned}</p>
+				<p class="seed mono">SEED {$run.seed}</p>
 			</div>
 			<div class="top-right">
 				<PressureGauge value={$run.pressure} cap={$run.pressureCap} />
@@ -329,6 +330,13 @@
 		font-size: 9px;
 		letter-spacing: 0.14em;
 		color: var(--lime);
+	}
+
+	.seed {
+		margin: 2px 0 0;
+		font-size: 8px;
+		letter-spacing: 0.14em;
+		color: var(--muted);
 	}
 
 	.contract {

@@ -1,10 +1,11 @@
 import { get } from 'svelte/store';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyGrid, metaFixture, runFixture } from '../test/fixtures';
 import {
 	chooseDraft,
 	deliver,
 	initGame,
+	newRun,
 	place,
 	resetAll,
 	resetRun,
@@ -15,7 +16,18 @@ import {
 	unlock
 } from './game';
 
+const mockedSeeds = vi.hoisted(() => ({ queue: [] as number[] }));
+
+vi.mock('../game/storage', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../game/storage')>();
+	return {
+		...actual,
+		randomSeed: vi.fn(() => mockedSeeds.queue.shift() ?? 42)
+	};
+});
+
 beforeEach(() => {
+	mockedSeeds.queue.length = 0;
 	window.localStorage.clear();
 	initGame();
 });
@@ -115,6 +127,26 @@ describe('game store', () => {
 		expect(get(save).meta.research).toBe(0);
 		expect(get(save).meta.unlocks).toEqual([]);
 		expect(get(save).settings.sound).toBe(false);
+	});
+
+	it('starts each new run from a fresh seed while keeping meta and settings', () => {
+		mockedSeeds.queue.push(3141592653, 2718281828);
+		initGame({ meta: metaFixture({ research: 5, unlocks: ['card-carbon'] }) });
+		setSetting('sound', false);
+
+		newRun();
+		const first = get(run)!;
+		newRun();
+		const second = get(run)!;
+
+		expect(first.seed).toBe(3141592653);
+		expect(second.seed).toBe(2718281828);
+		expect(second.seed).not.toBe(first.seed);
+		expect(get(save).meta.research).toBe(5);
+		expect(get(save).meta.unlocks).toEqual(['card-carbon']);
+		expect(get(save).meta.stats.runs).toBe(2);
+		expect(get(save).settings.sound).toBe(false);
+		expect(JSON.parse(window.localStorage.getItem(SAVE_KEY)!).run.seed).toBe(second.seed);
 	});
 
 	it('restores a saved run', () => {
