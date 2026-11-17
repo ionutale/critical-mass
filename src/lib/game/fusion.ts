@@ -2,6 +2,13 @@ import type { ElementRecord, RecipeRecord, RunState } from '../types';
 import { chainReduction, fusionScale, heavyReduction } from './effects';
 import { endTurn } from './turn';
 
+export interface FusionOption {
+	cell: number;
+	other: string;
+	result: string;
+	pressure: number;
+}
+
 export interface FusionStep {
 	step: number;
 	a: string;
@@ -9,6 +16,8 @@ export interface FusionStep {
 	result: string;
 	cell: number;
 	pressure: number;
+	options: FusionOption[];
+	choice: number;
 }
 
 export interface PlacementPreview {
@@ -52,7 +61,8 @@ export function previewPlacement(
 	handIndex: number,
 	cell: number,
 	elements: readonly ElementRecord[],
-	recipes: readonly RecipeRecord[]
+	recipes: readonly RecipeRecord[],
+	choices: readonly number[] = []
 ): PlacementPreview | null {
 	if (run.status !== 'active') return null;
 	if (run.pendingDraft || run.pendingTransition) return null;
@@ -70,44 +80,49 @@ export function previewPlacement(
 	let pressureGain = 0;
 
 	for (let index = 0; index < 24; index++) {
-		let consumed: number | null = null;
-		let result: string | null = null;
+		const options: FusionOption[] = [];
 
 		for (const candidate of neighbors(activeCell)) {
 			const other = grid[candidate];
 			if (!other) continue;
 			const recipe = findRecipe(active, other, recipes, run.hasCatalyst);
 			if (!recipe) continue;
-			consumed = candidate;
-			result = recipe.result;
-			break;
+
+			const optionElement = bySymbol.get(recipe.result);
+			if (!optionElement) continue;
+
+			const heavyDiscount = optionElement.heavy ? heavyReduction(run) : 0;
+			const basePressure =
+				4 + optionElement.tier + 2 * index + (optionElement.heavy ? 8 : 0) - heavyDiscount;
+			const chainDiscount = index === 0 ? 0 : Math.min(2 * index, chainReduction(run));
+			const pressure = Math.max(
+				1,
+				Math.round(Math.max(1, basePressure - chainDiscount) * fusionScale(run))
+			);
+
+			options.push({ cell: candidate, other, result: recipe.result, pressure });
 		}
 
-		if (consumed === null || result === null) break;
+		if (options.length === 0) break;
 
-		const resultElement = bySymbol.get(result);
-		if (!resultElement) break;
+		const requested = choices[index] ?? 0;
+		const choice = options[requested] ? requested : 0;
+		const selected = options[choice];
 
-		const heavyDiscount = resultElement.heavy ? heavyReduction(run) : 0;
-		const basePressure =
-			4 + resultElement.tier + 2 * index + (resultElement.heavy ? 8 : 0) - heavyDiscount;
-		const chainDiscount = index === 0 ? 0 : Math.min(2 * index, chainReduction(run));
-		const pressure = Math.max(
-			1,
-			Math.round(Math.max(1, basePressure - chainDiscount) * fusionScale(run))
-		);
 		steps.push({
 			step: index + 1,
 			a: active,
-			b: grid[consumed]!,
-			result,
-			cell: consumed,
-			pressure
+			b: selected.other,
+			result: selected.result,
+			cell: selected.cell,
+			pressure: selected.pressure,
+			options,
+			choice
 		});
-		pressureGain += pressure;
-		grid[consumed] = null;
-		grid[activeCell] = result;
-		active = result;
+		pressureGain += selected.pressure;
+		grid[selected.cell] = null;
+		grid[activeCell] = selected.result;
+		active = selected.result;
 	}
 
 	const overCap = run.pressure + pressureGain >= run.pressureCap;
@@ -129,9 +144,10 @@ export function placeCard(
 	handIndex: number,
 	cell: number,
 	elements: readonly ElementRecord[],
-	recipes: readonly RecipeRecord[]
+	recipes: readonly RecipeRecord[],
+	choices: readonly number[] = []
 ): RunState {
-	const preview = previewPlacement(run, handIndex, cell, elements, recipes);
+	const preview = previewPlacement(run, handIndex, cell, elements, recipes, choices);
 	if (!preview) return run;
 
 	const card = run.hand[handIndex];

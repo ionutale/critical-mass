@@ -5,6 +5,14 @@ import { emptyGrid, runFixture } from '../test/fixtures';
 import { placeCard, previewPlacement } from './fusion';
 import { createRun } from './turn';
 
+// Active He at 12 with Be at 7 (N) and C at 13 (E): Be+He->C, C+He->O.
+function branchRun() {
+	const grid = emptyGrid();
+	grid[7] = 'Be';
+	grid[13] = 'C';
+	return runFixture({ grid, hand: ['He'] });
+}
+
 describe('fusion', () => {
 	it('previews and commits the same single fusion', () => {
 		const run = createRun(42);
@@ -40,6 +48,32 @@ describe('fusion', () => {
 		expect(preview.grid[7]).toBeNull();
 		expect(preview.grid[11]).toBeNull();
 		expect(preview.grid[12]).toBe('Ne');
+	});
+
+	it('lists all candidate neighbors per step', () => {
+		const preview = previewPlacement(branchRun(), 0, 12, ELEMENTS, RECIPES)!;
+		expect(preview.steps[0].options.length).toBeGreaterThanOrEqual(2);
+	});
+
+	it('uses the chosen option index', () => {
+		const a = previewPlacement(branchRun(), 0, 12, ELEMENTS, RECIPES, [0])!;
+		const b = previewPlacement(branchRun(), 0, 12, ELEMENTS, RECIPES, [1])!;
+		expect(a.steps[0].result).not.toBe(b.steps[0].result);
+	});
+
+	it('falls back to first option for out-of-range choice', () => {
+		const a = previewPlacement(branchRun(), 0, 12, ELEMENTS, RECIPES, [99])!;
+		const b = previewPlacement(branchRun(), 0, 12, ELEMENTS, RECIPES, [])!;
+		expect(a.grid).toEqual(b.grid);
+	});
+
+	it('commit equals preview with non-default choices', () => {
+		const run = branchRun();
+		const choices = [1];
+		const preview = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, choices)!;
+		const next = placeCard(run, 0, 12, ELEMENTS, RECIPES, choices);
+		expect(next.grid).toEqual(preview.grid);
+		expect(next.pressure).toBe(preview.pressureAfter);
 	});
 
 	it('leaves a lone tile unfused and marks a meltdown at the cap', () => {
