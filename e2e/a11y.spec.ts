@@ -54,16 +54,15 @@ function saveFixture(overrides: Record<string, unknown> = {}): SaveState {
 			unlocks: [],
 			stats: { runs: 0, wins: 0, bestSector: 1, contracts: 0 }
 		},
-		settings: { sound: false, reduceMotion: true },
+		settings: { sound: false, reduceMotion: false },
 		introSeen: true,
 		...overrides
 	} as SaveState;
 }
 
 async function seed(page: Page, overrides: Record<string, unknown> = {}) {
-	// Keep axe runs stable: the saved setting only applies after mount, so the
-	// OS preference must also be reduced to stop the first entrance transition.
-	await page.emulateMedia({ reducedMotion: 'reduce' });
+	// Motion is intentionally enabled for these audits: the app gates its first
+	// paint in App.svelte, so axe no longer races the entrance transition.
 	await page.addInitScript(
 		([key, save]) => localStorage.setItem(key, save),
 		[SAVE_KEY, JSON.stringify(saveFixture(overrides))]
@@ -71,6 +70,10 @@ async function seed(page: Page, overrides: Record<string, unknown> = {}) {
 }
 
 async function axeIsClean(page: Page) {
+	// Axe reads a mid-transition opacity as a contrast failure. Keep the audit
+	// motion-enabled and wait for the longest entrance transition (200 ms) to
+	// settle instead of switching motion off.
+	await page.waitForTimeout(300);
 	const results = await new AxeBuilder({ page }).analyze();
 	expect(results.violations.map((violation) => violation.id)).toEqual([]);
 }

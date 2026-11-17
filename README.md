@@ -34,7 +34,7 @@ pnpm deploy        # build and deploy to Cloudflare Workers
 ## Fusion
 
 - The reactor is a 5×5 grid. Placing a card on an empty cell adds the tile and discards the card.
-- Only the **placed tile** fuses. Its neighbours resolve in **N → E → S → W** order, repeating until no more recipes match, so one placement can chain.
+- Only the **placed tile** fuses. At every step **all** compatible neighbours are offered as options; **N → E → S → W** is only the default order. Pick the branch at each step in the preview, and the chain repeats from the active cell until no recipe matches.
 - Each recipe is an unordered pair (some need the Catalyst). The preview must equal the commit: same steps, same result tile, same pressure.
 - Placing costs pressure `10 + tier + 4 × chain index` (heavy results add 8, reduced by modules). Meltdown happens when pressure reaches the current cap.
 - The deck cannot starve: hand refills after each turn, discards reshuffle.
@@ -60,7 +60,7 @@ Run `pnpm validate` after editing. It enforces the launch counts, recipe reachab
 
 ## Balance
 
-`pnpm balance` plays 40 seeded runs with a simple policy twice: no unlocks and all unlocks. It reports wins, meltdowns, average contracts, peak pressure, and sector. It is a floor for tuning, not a solver.
+`pnpm balance` plays 40 seeded runs each with three reference policies — casual, competent, and strong — in two configurations: no unlocks and all unlocks. It reports wins, meltdowns, abandoned runs, stalls (no delivery for 4,000 actions), average contracts, peak pressure, sector, and actions. The acceptance bands are 10–20% wins for casual/no-unlocks, 30–50% for competent/all-unlocks, and zero competent stalls. `pnpm balance --check` exits non-zero when a band misses, so tuning runs and CI can enforce the targets. It is a floor for tuning, not a solver.
 
 ## Saving
 

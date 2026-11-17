@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import RunScreen from './RunScreen.svelte';
 import { ELEMENTS } from '../data/elements';
@@ -59,12 +60,21 @@ describe('run screen', () => {
 		expect(options).toHaveLength(3);
 		expect(options[0]).toHaveTextContent('Be → C');
 		expect(options[0]).toHaveTextContent('+13');
+		// The trap lands on the first option and every option is a real focusable
+		// control, so keyboard users can Tab through the branches.
 		for (const option of options) {
-			expect(option).not.toHaveAttribute('tabindex', '-1');
+			expect(option).toBeEnabled();
+			expect(option).toHaveAttribute('type', 'button');
 		}
+		expect(options[0]).toHaveFocus();
 		expect(options[0]).toHaveAttribute('aria-pressed', 'true');
 		expect(options[1]).toHaveAttribute('aria-pressed', 'false');
 		expect(preview).toHaveTextContent(/final tile: O/i);
+
+		await userEvent.tab();
+		expect(options[1]).toHaveFocus();
+		await userEvent.tab({ shift: true });
+		expect(options[0]).toHaveFocus();
 
 		await fireEvent.click(options[1]);
 

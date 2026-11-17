@@ -18,7 +18,7 @@
 <div
 	class="backdrop"
 	class:meltdown={status === 'meltdown'}
-	transition:fade={{ duration: transitionDuration($reducedMotion, 200) }}
+	in:fade={{ duration: transitionDuration($reducedMotion, 200) }}
 >
 	<div
 		class="end"

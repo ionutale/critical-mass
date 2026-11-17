@@ -32,7 +32,7 @@ const ALL_UNLOCKS = UNLOCKS.map((unlock) => unlock.id);
 
 type Policy = 'casual' | 'competent' | 'strong';
 
-interface Result {
+export interface Result {
 	seed: number;
 	status: RunState['status'];
 	contracts: number;
@@ -43,6 +43,20 @@ interface Result {
 	idleAtEnd: number;
 	abandoned: boolean;
 	stalled: boolean;
+}
+
+/** Inclusive win-rate band (percent) with an optional stall ceiling. */
+export interface Band {
+	min: number;
+	max: number;
+	maxStalls?: number;
+}
+
+export interface Block {
+	label: string;
+	target: string;
+	results: Result[];
+	band?: Band;
 }
 
 interface Placement {
@@ -641,12 +655,40 @@ export function strongPlay(seed: number, unlocked: readonly string[]): Result {
 	return play(seed, unlocked, 'strong');
 }
 
-function report(label: string, target: string, results: Result[]): void {
+function winRate(results: readonly Result[]): number {
+	return (results.filter((result) => result.status === 'victory').length / results.length) * 100;
+}
+
+/** One message per acceptance band that missed. An empty list means all bands hold. */
+export function checkBands(blocks: readonly Block[]): string[] {
+	const failures: string[] = [];
+
+	for (const block of blocks) {
+		if (!block.band) continue;
+
+		const rate = winRate(block.results);
+		if (rate < block.band.min || rate > block.band.max) {
+			failures.push(
+				`${block.label}: ${rate.toFixed(0)}% wins, expected ${block.band.min}–${block.band.max}%`
+			);
+		}
+
+		const stalls = block.results.filter((result) => result.stalled).length;
+		if (block.band.maxStalls !== undefined && stalls > block.band.maxStalls) {
+			failures.push(`${block.label}: ${stalls} stalls, expected at most ${block.band.maxStalls}`);
+		}
+	}
+
+	return failures;
+}
+
+function report(block: Block): void {
+	const { label, target, results } = block;
 	const wins = results.filter((result) => result.status === 'victory').length;
 	const meltdowns = results.filter((result) => result.status === 'meltdown').length;
 	const abandoned = results.filter((result) => result.abandoned).length;
 	const stalls = results.filter((result) => result.stalled).length;
-	const rate = (wins / results.length) * 100;
+	const rate = winRate(results);
 	const average = (values: number[]) =>
 		values.reduce((sum, value) => sum + value, 0) / values.length;
 
@@ -667,37 +709,46 @@ function report(label: string, target: string, results: Result[]): void {
 
 const seeds = Array.from({ length: SEED_COUNT }, (_, index) => index + 1);
 
-function runReports(): void {
-	report(
-		'Casual · no unlocks',
-		'acceptance 10–20% wins',
-		seeds.map((seed) => casualPlay(seed, []))
-	);
-	report(
-		'Casual · all unlocks',
-		'reference only',
-		seeds.map((seed) => casualPlay(seed, ALL_UNLOCKS))
-	);
-	report(
-		'Competent · no unlocks',
-		'reference only',
-		seeds.map((seed) => competentPlay(seed, []))
-	);
-	report(
-		'Competent · all unlocks',
-		'acceptance 30–50% wins',
-		seeds.map((seed) => competentPlay(seed, ALL_UNLOCKS))
-	);
-	report(
-		'Strong · no unlocks',
-		'reference only',
-		seeds.map((seed) => strongPlay(seed, []))
-	);
-	report(
-		'Strong · all unlocks',
-		'reference only',
-		seeds.map((seed) => strongPlay(seed, ALL_UNLOCKS))
-	);
+function collectBlocks(): Block[] {
+	return [
+		{
+			label: 'Casual · no unlocks',
+			target: 'acceptance 10–20% wins',
+			results: seeds.map((seed) => casualPlay(seed, [])),
+			band: { min: 10, max: 20 }
+		},
+		{
+			label: 'Casual · all unlocks',
+			target: 'reference only',
+			results: seeds.map((seed) => casualPlay(seed, ALL_UNLOCKS))
+		},
+		{
+			label: 'Competent · no unlocks',
+			target: 'reference only',
+			results: seeds.map((seed) => competentPlay(seed, []))
+		},
+		{
+			label: 'Competent · all unlocks',
+			target: 'acceptance 30–50% wins · 0 stalls',
+			results: seeds.map((seed) => competentPlay(seed, ALL_UNLOCKS)),
+			band: { min: 30, max: 50, maxStalls: 0 }
+		},
+		{
+			label: 'Strong · no unlocks',
+			target: 'reference only',
+			results: seeds.map((seed) => strongPlay(seed, []))
+		},
+		{
+			label: 'Strong · all unlocks',
+			target: 'reference only',
+			results: seeds.map((seed) => strongPlay(seed, ALL_UNLOCKS))
+		}
+	];
+}
+
+function runReports(check: boolean): void {
+	const blocks = collectBlocks();
+	for (const block of blocks) report(block);
 
 	console.log(
 		'\nNote: the two competent blocks are a heuristic regression guard, not a difficulty measurement.'
@@ -708,9 +759,21 @@ function runReports(): void {
 	console.log(
 		'The strong reference (earlier venting, refuses melting target lines) reaches the win ceiling in BOTH configs: once pressure is managed, unlocks do not measurably change difficulty in this harness.'
 	);
+
+	if (!check) return;
+
+	const failures = checkBands(blocks);
+	if (failures.length === 0) {
+		console.log('\nBalance check: all acceptance bands hold.');
+		return;
+	}
+
+	console.error('\nBalance check failed:');
+	for (const failure of failures) console.error(`  ${failure}`);
+	process.exitCode = 1;
 }
 
-/** Vitest imports this module for the branch-search test; only report on a direct run. */
+/** Vitest imports this module for policy and branch tests; only report on a direct run. */
 const underTest = process.env.VITEST !== undefined;
 
-if (!underTest) runReports();
+if (!underTest) runReports(process.argv.includes('--check'));

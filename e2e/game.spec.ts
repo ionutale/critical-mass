@@ -129,6 +129,44 @@ test('venting lowers pressure and discards one card', async ({ page }) => {
 	expect(after.pressure).toBeLessThan(60);
 });
 
+test.describe('preview on a small phone', () => {
+	test.use({ viewport: { width: 375, height: 667 } });
+
+	test('keeps Confirm reachable in a branching chain', async ({ page }) => {
+		const grid = emptyGrid();
+		// Be in the centre fuses with all four He neighbours: four steps with
+		// 4/3/2/1 options (10 branch buttons), the longest branching chain the
+		// engine allows. The dialog is taller than a 375×667 viewport.
+		for (const cell of [7, 13, 17, 11]) grid[cell] = 'He';
+		await seed(page, { grid, hand: ['Be'], pressure: 0 });
+		await page.goto('/');
+		await page.getByRole('button', { name: /continue run/i }).click();
+
+		await page.getByRole('button', { name: /beryllium card 1/i }).click();
+		await page.getByRole('button', { name: /cell 12/i }).click();
+
+		const dialog = page.getByRole('dialog', { name: /preview/i });
+		await expect(dialog).toBeVisible();
+
+		const optionCounts = await dialog
+			.locator('[role="group"]')
+			.evaluateAll((groups) => groups.map((group) => group.querySelectorAll('button').length));
+		expect(optionCounts).toEqual([4, 3, 2, 1]);
+
+		expect(await dialog.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+			true
+		);
+
+		const confirm = dialog.getByRole('button', { name: /^confirm$/i });
+		await expect(confirm).toBeInViewport();
+		await expect(dialog.getByRole('button', { name: /^cancel$/i })).toBeInViewport();
+		await confirm.click();
+
+		await expect(dialog).toHaveCount(0);
+		await expect(page.getByRole('button', { name: /cell 12/i })).toContainText('Mg');
+	});
+});
+
 test('a finished victory save is reported and can be replaced', async ({ page }) => {
 	await seed(page, { status: 'victory', sector: 3, contractsCompleted: 15 });
 	await page.goto('/');

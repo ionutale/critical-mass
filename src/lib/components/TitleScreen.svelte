@@ -4,12 +4,15 @@
 	import { run, save } from '../stores/game';
 
 	let {
+		hydrated = true,
 		onContinue,
 		onNewRun,
 		onResearch,
 		onSettings,
 		onHowTo
 	}: {
+		/** False on the very first paint, before initGame() loads the saved setting. */
+		hydrated?: boolean;
 		onContinue: () => void;
 		onNewRun: () => void;
 		onResearch: () => void;
@@ -23,7 +26,7 @@
 
 <main
 	class="app title"
-	in:fly|global={{ y: 10, duration: transitionDuration($reducedMotion, 200) }}
+	in:fly|global={{ y: 10, duration: hydrated ? transitionDuration($reducedMotion, 200) : 0 }}
 >
 	<p class="kicker mono">REACTOR CONTROL // CORE ONLINE</p>
 	<h1>CRITICAL MASS</h1>

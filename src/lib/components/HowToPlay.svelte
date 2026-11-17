@@ -28,9 +28,10 @@
 	<section>
 		<h2>Fusion</h2>
 		<p>
-			Only the tile you just placed fuses. The reactor checks north, east, south, then west,
-			consuming the first compatible neighbour and repeating from the active cell. Cards are
-			actions; tiles are board state.
+			Only the tile you just placed fuses. At every step the reactor offers every compatible
+			neighbour as an option; north, east, south, then west is only the default order. Branch the
+			chain in the preview, and it repeats from the active cell. Cards are actions; tiles are board
+			state.
 		</p>
 	</section>
 
@@ -54,8 +55,9 @@
 	<section>
 		<h2>Preview</h2>
 		<p>
-			Select a card, then a cell. The preview shows every chain step, the final tile, and the exact
-			pressure change. Confirm to commit; cancel changes nothing.
+			Select a card, then a cell. The preview shows every chain step and its branch options, the
+			final tile, and the exact pressure change. Choose a different neighbour at any step to plan
+			the path, then confirm to commit exactly that path; cancel changes nothing.
 		</p>
 	</section>
 

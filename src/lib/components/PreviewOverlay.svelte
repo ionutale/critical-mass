@@ -20,7 +20,7 @@
 	const last = $derived(preview.steps.at(-1) ?? null);
 </script>
 
-<div class="backdrop" transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
+<div class="backdrop" in:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
 	<div
 		class="preview"
 		role="dialog"
@@ -136,6 +136,13 @@
 
 	.preview {
 		width: min(360px, 100%);
+		/* A branching chain can produce more options than a small phone can
+		   show. Keep the dialog inside the viewport and let it scroll, with the
+		   action row pinned so Confirm/Cancel stay reachable. */
+		max-height: calc(100vh - 44px);
+		max-height: calc(100dvh - 44px);
+		overflow-y: auto;
+		overscroll-behavior: contain;
 		padding: 20px;
 		background: var(--panel);
 		border: 1px solid var(--cyan);
@@ -254,9 +261,15 @@
 	}
 
 	.actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 1;
 		display: flex;
 		gap: 8px;
 		margin-top: 16px;
+		padding: 12px 0 2px;
+		background: var(--panel);
+		border-top: 1px solid var(--line);
 	}
 
 	.actions button {

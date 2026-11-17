@@ -12,9 +12,14 @@
 	type View = 'title' | 'run' | 'research' | 'settings' | 'howto';
 
 	let view = $state<View>('title');
+	// The saved Reduce Motion setting only exists after initGame(), which runs
+	// on mount. Gate the first paint so a returning reduced-motion player never
+	// sees the title entrance; later view changes animate normally.
+	let hydrated = $state(false);
 
 	onMount(() => {
 		initGame();
+		hydrated = true;
 	});
 
 	$effect(() => {
@@ -27,7 +32,7 @@
 	}
 </script>
 
-<div class="app-root" class:reduce-motion={$reducedMotion}>
+<div class="app-root" class:reduce-motion={!hydrated || $reducedMotion}>
 	{#key view}
 		{#if view === 'run' && $run}
 			<RunScreen onMenu={() => (view = 'title')} />
@@ -39,6 +44,7 @@
 			<HowToPlay onBack={() => (view = 'title')} />
 		{:else}
 			<TitleScreen
+				{hydrated}
 				onContinue={() => (view = 'run')}
 				onNewRun={startNewRun}
 				onResearch={() => (view = 'research')}

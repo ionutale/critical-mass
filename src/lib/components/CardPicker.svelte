@@ -19,7 +19,7 @@
 	} = $props();
 </script>
 
-<div class="backdrop" transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
+<div class="backdrop" in:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
 	<div
 		class="picker"
 		role="dialog"
