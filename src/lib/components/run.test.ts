@@ -117,6 +117,19 @@ describe('run screen', () => {
 		expect(screen.getByLabelText(/pressure 0 of 100/i)).toBeInTheDocument();
 	});
 
+	it('keeps surviving cards mounted when a card leaves the hand', async () => {
+		initGame({ run: runFixture({ hand: ['H', 'He', 'O', 'C', 'N'] }) });
+		render(RunScreen);
+
+		const helium = screen.getByRole('button', { name: /helium card 2/i });
+		await fireEvent.click(screen.getByRole('button', { name: /vent/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen, discard 1/i }));
+
+		// Stable card identity is what lets `animate:flip` slide the survivors: the
+		// helium card must be the same DOM node after it shifts to the first slot.
+		expect(screen.getByRole('button', { name: /helium card 1/i })).toBe(helium);
+	});
+
 	it('scraps one tile per turn', async () => {
 		render(RunScreen);
 

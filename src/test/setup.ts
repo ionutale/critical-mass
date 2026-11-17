@@ -1,5 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
+// jsdom does not implement the Web Animations API. Svelte's `animate:` directives
+// call `Element#getAnimations()` to detect in-flight animations when a keyed block
+// loses a node, so provide the empty result jsdom would have if nothing animated.
+if (typeof Element !== 'undefined' && typeof Element.prototype.getAnimations !== 'function') {
+	Element.prototype.getAnimations = () => [];
+}
+
 class MemoryStorage implements Storage {
 	private readonly map = new Map<string, string>();
 

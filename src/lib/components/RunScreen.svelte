@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 	import { contractById } from '../data/contracts';
 	import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../data/elements';
@@ -60,6 +61,43 @@
 	const locked = $derived(
 		Boolean($run && ($run.pendingDraft || $run.pendingTransition || $run.status !== 'active'))
 	);
+
+	type HandEntry = { id: number; card: string };
+
+	// The run stores the hand as plain symbols, so it has no per-card identity.
+	// Index keys make `animate:flip` inert: removing a card renumbers every block
+	// and Svelte sees unchanged keys. Reconcile cards in order against the previous
+	// hand instead, so removed cards drop out, survivors keep their id and slide,
+	// and freshly drawn cards enter at the end.
+	let nextHandId = 0;
+	let previousHand: HandEntry[] = [];
+
+	function reconcileHand(cards: readonly string[]): HandEntry[] {
+		const next: HandEntry[] = [];
+		let cursor = 0;
+
+		for (const card of cards) {
+			let match = -1;
+			for (let index = cursor; index < previousHand.length; index++) {
+				if (previousHand[index].card === card) {
+					match = index;
+					break;
+				}
+			}
+
+			if (match === -1) {
+				next.push({ id: nextHandId++, card });
+			} else {
+				cursor = match + 1;
+				next.push(previousHand[match]);
+			}
+		}
+
+		previousHand = next;
+		return next;
+	}
+
+	const handEntries = $derived.by(() => reconcileHand($run?.hand ?? []));
 
 	function modifierLabel(modifier: string): string {
 		if (modifier === 'one-chain') return 'finish in chains of 2 or more';
@@ -228,21 +266,22 @@
 			<p class="label mono">HAND // {$run.hand.length}</p>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<div class="cards" tabindex="0" role="group" aria-label="Hand cards">
-				{#each $run.hand as card, index (index)}
+				{#each handEntries as entry, index (entry.id)}
 					<button
 						type="button"
 						class="card"
 						class:selected={selected === index}
 						aria-pressed={selected === index}
-						aria-label={`${card} ${ELEMENT_BY_SYMBOL.get(card)?.name ?? card} card ${index + 1}`}
+						aria-label={`${entry.card} ${ELEMENT_BY_SYMBOL.get(entry.card)?.name ?? entry.card} card ${index + 1}`}
 						disabled={locked}
+						animate:flip={{ duration: transitionDuration($reducedMotion, 200) }}
 						onclick={() => {
 							if (selected !== index) playSound('pick');
 							selected = selected === index ? null : index;
 						}}
 					>
-						<span class="card-symbol">{card}</span>
-						<span class="card-name">{ELEMENT_BY_SYMBOL.get(card)?.name ?? card}</span>
+						<span class="card-symbol">{entry.card}</span>
+						<span class="card-name">{ELEMENT_BY_SYMBOL.get(entry.card)?.name ?? entry.card}</span>
 					</button>
 				{/each}
 			</div>
@@ -316,6 +355,10 @@
 		background: var(--panel);
 		border: 1px solid var(--line);
 		border-radius: 6px;
+		transition:
+			transform 120ms ease,
+			border-color 120ms ease,
+			background-color 120ms ease;
 	}
 
 	.kicker {
@@ -402,6 +445,7 @@
 		background: var(--amber);
 		border: 0;
 		border-radius: 6px;
+		transition: transform 120ms ease;
 	}
 
 	.deliver:disabled {
@@ -489,6 +533,24 @@
 		background: var(--panel);
 		border: 1px solid var(--line);
 		border-radius: 7px;
+		transition:
+			transform 120ms ease,
+			border-color 120ms ease,
+			background-color 120ms ease;
+	}
+
+	@media (hover: hover) {
+		.actions button:not(:disabled):hover,
+		.deliver:not(:disabled):hover,
+		.menu:hover {
+			transform: translateY(-2px);
+		}
+	}
+
+	.actions button:not(:disabled):active,
+	.deliver:not(:disabled):active,
+	.menu:active {
+		transform: scale(0.97);
 	}
 
 	.actions button.active {
@@ -535,7 +597,7 @@
 		display: flex;
 		gap: 8px;
 		overflow-x: auto;
-		padding: 3px 1px 5px;
+		padding: 6px 1px 5px;
 	}
 
 	.card {
@@ -550,11 +612,49 @@
 		background: var(--panel-2);
 		border: 1px solid rgba(56, 225, 255, 0.35);
 		border-radius: 7px;
+		transition:
+			transform 140ms ease,
+			border-color 120ms ease,
+			box-shadow 120ms ease;
+	}
+
+	@media (hover: hover) {
+		.card:not(:disabled):hover {
+			transform: translateY(-3px);
+			border-color: rgba(56, 225, 255, 0.7);
+		}
+	}
+
+	.card:not(:disabled):active {
+		transform: translateY(-1px) scale(0.97);
 	}
 
 	.card.selected {
 		border-color: var(--cyan);
 		box-shadow: 0 0 14px rgba(56, 225, 255, 0.35);
+		animation: card-pop 180ms ease-out;
+	}
+
+	@keyframes card-pop {
+		0% {
+			transform: scale(0.97);
+		}
+		55% {
+			transform: scale(1.04);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+
+	:global(.reduce-motion) .card.selected {
+		animation: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.card.selected {
+			animation: none;
+		}
 	}
 
 	.card-symbol {
