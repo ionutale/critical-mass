@@ -124,13 +124,13 @@ export function validateContent(content: {
 
 	for (const sector of [1, 2, 3] as const) {
 		const inSector = content.contracts.filter((contract) => contract.sector === sector);
-		if (inSector.length !== 10) {
-			errors.push(`Sector ${sector} has ${inSector.length} contracts instead of 10.`);
+		if (inSector.length !== 15) {
+			errors.push(`Sector ${sector} has ${inSector.length} contracts instead of 15.`);
 		}
 		for (const slot of [1, 2, 3, 4, 5] as const) {
 			const variants = inSector.filter((contract) => contract.slot === slot);
-			if (variants.length !== 2) {
-				errors.push(`Sector ${sector} slot ${slot} has ${variants.length} variants instead of 2.`);
+			if (variants.length !== 3) {
+				errors.push(`Sector ${sector} slot ${slot} has ${variants.length} variants instead of 3.`);
 			}
 		}
 	}
@@ -143,8 +143,8 @@ export function validateContent(content: {
 		if (!module.name.trim()) errors.push(`Module ${module.id} has no name.`);
 		if (!module.description.trim()) errors.push(`Module ${module.id} has no description.`);
 	}
-	if (content.modules && modules.length !== 24) {
-		errors.push(`Expected 24 modules, found ${modules.length}.`);
+	if (content.modules && modules.length !== 30) {
+		errors.push(`Expected 30 modules, found ${modules.length}.`);
 	}
 
 	const unlocks = content.unlocks ?? [];
@@ -167,8 +167,8 @@ export function validateContent(content: {
 			errors.push(`Unlock ${unlock.id} references an unknown module ${unlock.ref}.`);
 		}
 	}
-	if (content.unlocks && unlocks.length !== 12) {
-		errors.push(`Expected 12 unlocks, found ${unlocks.length}.`);
+	if (content.unlocks && unlocks.length !== 16) {
+		errors.push(`Expected 16 unlocks, found ${unlocks.length}.`);
 	}
 
 	return { ok: errors.length === 0, errors };

@@ -28,5 +28,18 @@ export const RECIPES: readonly RecipeRecord[] = [
 	recipe('Ag', 'He', 'Au', true),
 	recipe('Au', 'He', 'Hg', true),
 	recipe('Hg', 'He', 'Pb', true),
-	recipe('Pb', 'He', 'U', true)
+	recipe('Pb', 'He', 'U', true),
+	// Side branches: each new pair gives a placed tile an extra fusable neighbor.
+	recipe('H', 'Be', 'B'),
+	recipe('B', 'He', 'N'),
+	recipe('C', 'N', 'F'),
+	recipe('F', 'He', 'Ne'),
+	recipe('N', 'O', 'Ne'),
+	recipe('Si', 'C', 'P'),
+	recipe('P', 'He', 'S'),
+	recipe('Pb', 'U', 'Np', true),
+	recipe('U', 'He', 'Np', true),
+	recipe('U', 'Np', 'Pu', true),
+	recipe('Np', 'He', 'Pu', true),
+	recipe('Pu', 'He', 'Am', true)
 ];

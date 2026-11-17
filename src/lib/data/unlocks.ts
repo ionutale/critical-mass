@@ -100,6 +100,38 @@ export const UNLOCKS: readonly UnlockRecord[] = [
 		cost: 12,
 		kind: 'contract',
 		ref: 'draft-expander'
+	},
+	{
+		id: 'card-boron',
+		name: 'Boron Stocks',
+		description: 'Add Boron cards to the starting draft pool.',
+		cost: 4,
+		kind: 'card',
+		ref: 'B'
+	},
+	{
+		id: 'card-fluorine',
+		name: 'Fluorine Stocks',
+		description: 'Add Fluorine cards to the starting draft pool.',
+		cost: 6,
+		kind: 'card',
+		ref: 'F'
+	},
+	{
+		id: 'module-flux-regulator',
+		name: 'Flux Regulator',
+		description: 'Add Flux Regulator to the module draft pool.',
+		cost: 8,
+		kind: 'module',
+		ref: 'flux-regulator'
+	},
+	{
+		id: 'module-resonance-buffer',
+		name: 'Resonance Buffer',
+		description: 'Add Resonance Buffer to the module draft pool.',
+		cost: 9,
+		kind: 'module',
+		ref: 'resonance-buffer'
 	}
 ];
 

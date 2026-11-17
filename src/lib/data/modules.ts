@@ -144,6 +144,42 @@ export const MODULES: readonly ModuleRecord[] = [
 		name: 'Heavy Seed',
 		description: 'Unlock the catalyst-gated heavy chain.',
 		effect: 'catalyst'
+	},
+	{
+		id: 'flux-regulator',
+		name: 'Flux Regulator',
+		description: 'Fusion pressure −10%.',
+		effect: 'fusion-10'
+	},
+	{
+		id: 'vent-stack',
+		name: 'Vent Stack',
+		description: 'Venting sheds another 5 pressure.',
+		effect: 'vent+5'
+	},
+	{
+		id: 'wide-rack',
+		name: 'Wide Rack',
+		description: 'Hand limit +1.',
+		effect: 'hand+1'
+	},
+	{
+		id: 'resonance-buffer',
+		name: 'Resonance Buffer',
+		description: 'Chain steps after the first cost 2 less pressure.',
+		effect: 'chain-bonus-2'
+	},
+	{
+		id: 'helium-well',
+		name: 'Helium Well',
+		description: 'Add two He cards to the discard pile.',
+		effect: 'add-he-2'
+	},
+	{
+		id: 'pressure-shell',
+		name: 'Pressure Shell',
+		description: 'Pressure cap +10.',
+		effect: 'cap+10'
 	}
 ];
 

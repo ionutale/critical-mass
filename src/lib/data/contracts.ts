@@ -20,6 +20,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Two helium. The reactor wants balloons.'
 	},
 	{
+		id: 's1-1c',
+		sector: 1,
+		slot: 1,
+		target: 'He',
+		count: 3,
+		modifier: null,
+		brief: 'Three helium. The reactor wants a parade.'
+	},
+	{
 		id: 's1-2a',
 		sector: 1,
 		slot: 2,
@@ -36,6 +45,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		count: 1,
 		modifier: null,
 		brief: 'Carbon. All the good stuff is carbon.'
+	},
+	{
+		id: 's1-2c',
+		sector: 1,
+		slot: 2,
+		target: 'B',
+		count: 1,
+		modifier: null,
+		brief: 'Boron for the control rods. It absorbs the drama.'
 	},
 	{
 		id: 's1-3a',
@@ -56,6 +74,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Oxygen. Try not to make it exciting.'
 	},
 	{
+		id: 's1-3c',
+		sector: 1,
+		slot: 3,
+		target: 'F',
+		count: 1,
+		modifier: null,
+		brief: 'Fluorine. Very reactive, very confident.'
+	},
+	{
 		id: 's1-4a',
 		sector: 1,
 		slot: 4,
@@ -74,6 +101,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Two oxygen above fifty pressure. The gauge likes company.'
 	},
 	{
+		id: 's1-4c',
+		sector: 1,
+		slot: 4,
+		target: 'N',
+		count: 2,
+		modifier: 'pressure-50',
+		brief: 'Two nitrogen above fifty. The gauge is a suggestion.'
+	},
+	{
 		id: 's1-5a',
 		sector: 1,
 		slot: 5,
@@ -90,6 +126,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		count: 2,
 		modifier: 'pressure-50',
 		brief: 'Boss order: two magnesium, and make it hot.'
+	},
+	{
+		id: 's1-5c',
+		sector: 1,
+		slot: 5,
+		target: 'Mg',
+		count: 3,
+		modifier: 'no-vent',
+		brief: 'Boss order: three magnesium, vents shut, no excuses.'
 	},
 
 	{
@@ -111,6 +156,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Sulfur. The lab smells like ambition.'
 	},
 	{
+		id: 's2-1c',
+		sector: 2,
+		slot: 1,
+		target: 'P',
+		count: 1,
+		modifier: null,
+		brief: 'Phosphorus for the warning stripes.'
+	},
+	{
 		id: 's2-2a',
 		sector: 2,
 		slot: 2,
@@ -127,6 +181,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		count: 2,
 		modifier: 'no-vent',
 		brief: 'Two calcium, no venting. The bones are watching.'
+	},
+	{
+		id: 's2-2c',
+		sector: 2,
+		slot: 2,
+		target: 'Si',
+		count: 2,
+		modifier: 'one-chain',
+		brief: 'Two silicon in one chain. Keep the lattice together.'
 	},
 	{
 		id: 's2-3a',
@@ -147,6 +210,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Chromium for the shiny parts.'
 	},
 	{
+		id: 's2-3c',
+		sector: 2,
+		slot: 3,
+		target: 'P',
+		count: 2,
+		modifier: 'pressure-50',
+		brief: 'Two phosphorus above fifty. Glowing is expected.'
+	},
+	{
 		id: 's2-4a',
 		sector: 2,
 		slot: 4,
@@ -165,6 +237,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Iron. The reactor has opinions about iron.'
 	},
 	{
+		id: 's2-4c',
+		sector: 2,
+		slot: 4,
+		target: 'S',
+		count: 2,
+		modifier: 'no-vent',
+		brief: 'Two sulfur, no venting. Hold your breath.'
+	},
+	{
 		id: 's2-5a',
 		sector: 2,
 		slot: 5,
@@ -181,6 +262,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		count: 2,
 		modifier: 'pressure-50',
 		brief: 'Boss order: two iron, hot and structural.'
+	},
+	{
+		id: 's2-5c',
+		sector: 2,
+		slot: 5,
+		target: 'Fe',
+		count: 3,
+		modifier: null,
+		brief: 'Boss order: three iron. The reactor is building a skeleton.'
 	},
 
 	{
@@ -202,6 +292,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Nickel for the coolant fittings.'
 	},
 	{
+		id: 's3-1c',
+		sector: 3,
+		slot: 1,
+		target: 'Zn',
+		count: 1,
+		modifier: null,
+		brief: 'Zinc for the coating on the thing that needs coating.'
+	},
+	{
 		id: 's3-2a',
 		sector: 3,
 		slot: 2,
@@ -218,6 +317,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		count: 2,
 		modifier: 'no-vent',
 		brief: 'Two zinc, no venting. The coating is watching.'
+	},
+	{
+		id: 's3-2c',
+		sector: 3,
+		slot: 2,
+		target: 'Np',
+		count: 1,
+		modifier: null,
+		brief: 'Neptunium. It was not in the catalog.'
 	},
 	{
 		id: 's3-3a',
@@ -238,6 +346,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Gold above fifty pressure. Tasteful and hot.'
 	},
 	{
+		id: 's3-3c',
+		sector: 3,
+		slot: 3,
+		target: 'Pu',
+		count: 1,
+		modifier: null,
+		brief: 'Plutonium for the shielding. The shielding is the plutonium.'
+	},
+	{
 		id: 's3-4a',
 		sector: 3,
 		slot: 4,
@@ -256,6 +373,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		brief: 'Lead for the shielding.'
 	},
 	{
+		id: 's3-4c',
+		sector: 3,
+		slot: 4,
+		target: 'Am',
+		count: 1,
+		modifier: null,
+		brief: 'Americium for the smoke alarm. One detector, one warhead.'
+	},
+	{
 		id: 's3-5a',
 		sector: 3,
 		slot: 5,
@@ -272,6 +398,15 @@ export const CONTRACTS: readonly ContractTemplate[] = [
 		count: 2,
 		modifier: 'pressure-50',
 		brief: 'Boss order: two uranium. The reactor is lying about being calm.'
+	},
+	{
+		id: 's3-5c',
+		sector: 3,
+		slot: 5,
+		target: 'U',
+		count: 3,
+		modifier: 'no-vent',
+		brief: 'Boss order: three uranium. Nobody is calm now.'
 	}
 ];
 

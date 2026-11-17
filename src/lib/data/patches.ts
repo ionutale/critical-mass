@@ -36,6 +36,18 @@ export const PATCHES: readonly PatchRecord[] = [
 		name: 'Express Line',
 		description: 'This run, each delivery counts as 2 progress.',
 		effect: 'delivery+1'
+	},
+	{
+		id: 'patch-buffer',
+		name: 'Resonance Buffer',
+		description: 'This run, chain steps after the first cost 2 less pressure.',
+		effect: 'chain-bonus-2'
+	},
+	{
+		id: 'patch-heavy',
+		name: 'Heavy Permit',
+		description: 'This run, heavy fusions cost 4 less pressure.',
+		effect: 'neutron'
 	}
 ];
 
