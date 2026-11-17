@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { fade, fly } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../data/elements';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 
 	let {
 		title,
@@ -17,12 +19,13 @@
 	} = $props();
 </script>
 
-<div class="backdrop">
+<div class="backdrop" transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
 	<div
 		class="picker"
 		role="dialog"
 		aria-modal="true"
 		aria-label={title}
+		in:fly={{ y: 8, duration: transitionDuration($reducedMotion, 180) }}
 		use:trapFocus={{ onEscape: () => onCancel?.() }}
 	>
 		<p class="kicker">REACTOR CONTROL</p>

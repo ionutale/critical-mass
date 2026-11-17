@@ -1,8 +1,10 @@
 <script lang="ts">
+	import { fade, fly } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../data/elements';
 	import { MODULE_BY_ID } from '../data/modules';
 	import { PATCH_BY_ID } from '../data/patches';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import type { DraftOption } from '../types';
 
 	let {
@@ -48,8 +50,15 @@
 	}}
 />
 
-<div class="backdrop">
-	<div class="draft" role="dialog" aria-modal="true" aria-labelledby="draft-title" use:trapFocus>
+<div class="backdrop" transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
+	<div
+		class="draft"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="draft-title"
+		in:fly={{ y: 8, duration: transitionDuration($reducedMotion, 180) }}
+		use:trapFocus
+	>
 		<p class="kicker mono">{kind === 'sector' ? 'SECTOR TRANSITION' : 'CONTRACT COMPLETE'}</p>
 		<h2 id="draft-title">
 			{kind === 'sector' ? 'Choose a free module' : 'Choose one upgrade'}

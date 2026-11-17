@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { fade, fly } from 'svelte/transition';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
+
 	let {
 		sector,
 		onEnter
@@ -11,8 +14,14 @@
 	const floor = $derived(next === 2 ? 20 : 40);
 </script>
 
-<div class="backdrop">
-	<div class="transition" role="dialog" aria-modal="true" aria-labelledby="transition-title">
+<div class="backdrop" transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
+	<div
+		class="transition"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="transition-title"
+		in:fly={{ y: 8, duration: transitionDuration($reducedMotion, 180) }}
+	>
 		<p class="kicker mono">SECTOR {sector} CLEARED</p>
 		<h2 id="transition-title">Sector {next}</h2>
 		<p class="copy">

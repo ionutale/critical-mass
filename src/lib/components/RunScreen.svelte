@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
 	import { contractById } from '../data/contracts';
 	import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../data/elements';
 	import { MODULE_BY_ID } from '../data/modules';
@@ -7,7 +8,7 @@
 	import { contractCount, ventAmount } from '../game/effects';
 	import { previewPlacement, type PlacementPreview } from '../game/fusion';
 	import { playSound } from '../game/sound';
-	import { reducedMotion } from '../stores/motion';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import {
 		chooseDraft,
 		deliver,
@@ -125,7 +126,11 @@
 </script>
 
 {#if $run && contract}
-	<main class="app" class:shake={$run.status === 'meltdown'}>
+	<main
+		class="app"
+		class:shake={$run.status === 'meltdown'}
+		in:fly|global={{ y: 10, duration: transitionDuration($reducedMotion, 200) }}
+	>
 		<p class="visually-hidden" role="status" aria-live="polite">{announcement}</p>
 
 		<header class="top">

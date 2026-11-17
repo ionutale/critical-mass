@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import { run, save } from '../stores/game';
 
 	let {
@@ -19,7 +21,10 @@
 	const finished = $derived(Boolean($run && $run.status !== 'active'));
 </script>
 
-<main class="app title">
+<main
+	class="app title"
+	in:fly|global={{ y: 10, duration: transitionDuration($reducedMotion, 200) }}
+>
 	<p class="kicker mono">REACTOR CONTROL // CORE ONLINE</p>
 	<h1>CRITICAL MASS</h1>
 	<p class="tagline">

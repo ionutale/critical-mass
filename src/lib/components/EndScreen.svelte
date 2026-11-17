@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { fade, scale } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import type { RunState } from '../types';
 
 	let {
@@ -13,12 +15,17 @@
 	} = $props();
 </script>
 
-<div class="backdrop" class:meltdown={status === 'meltdown'}>
+<div
+	class="backdrop"
+	class:meltdown={status === 'meltdown'}
+	transition:fade={{ duration: transitionDuration($reducedMotion, 200) }}
+>
 	<div
 		class="end"
 		role={status === 'meltdown' ? 'alert' : 'dialog'}
 		aria-modal="true"
 		aria-labelledby="end-title"
+		in:scale={{ start: 0.95, duration: transitionDuration($reducedMotion, 200) }}
 		use:trapFocus
 	>
 		<p class="kicker mono">{status === 'meltdown' ? 'REACTOR LOST' : 'RUN COMPLETE'}</p>

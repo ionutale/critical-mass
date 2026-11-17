@@ -20,3 +20,17 @@ export const reducedMotion = derived(
 	[save, systemReducedMotion],
 	([$save, $system]) => $save.settings.reduceMotion || $system
 );
+
+// Svelte's transitions are driven by the Web Animations API. Without it the
+// element cannot be animated, so every duration collapses to 0.
+const canAnimate =
+	typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function';
+
+/**
+ * Duration for a Svelte transition. Returns 0 when the user asked for reduced
+ * motion (setting or OS preference) or when the environment cannot animate, so
+ * both motion switches disable the motion.
+ */
+export function transitionDuration(reduced: boolean, base: number): number {
+	return reduced || !canAnimate ? 0 : base;
+}

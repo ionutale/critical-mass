@@ -28,21 +28,23 @@
 </script>
 
 <div class="app-root" class:reduce-motion={$reducedMotion}>
-	{#if view === 'run' && $run}
-		<RunScreen onMenu={() => (view = 'title')} />
-	{:else if view === 'research'}
-		<ResearchLab onBack={() => (view = 'title')} />
-	{:else if view === 'settings'}
-		<SettingsScreen onBack={() => (view = 'title')} />
-	{:else if view === 'howto'}
-		<HowToPlay onBack={() => (view = 'title')} />
-	{:else}
-		<TitleScreen
-			onContinue={() => (view = 'run')}
-			onNewRun={startNewRun}
-			onResearch={() => (view = 'research')}
-			onSettings={() => (view = 'settings')}
-			onHowTo={() => (view = 'howto')}
-		/>
-	{/if}
+	{#key view}
+		{#if view === 'run' && $run}
+			<RunScreen onMenu={() => (view = 'title')} />
+		{:else if view === 'research'}
+			<ResearchLab onBack={() => (view = 'title')} />
+		{:else if view === 'settings'}
+			<SettingsScreen onBack={() => (view = 'title')} />
+		{:else if view === 'howto'}
+			<HowToPlay onBack={() => (view = 'title')} />
+		{:else}
+			<TitleScreen
+				onContinue={() => (view = 'run')}
+				onNewRun={startNewRun}
+				onResearch={() => (view = 'research')}
+				onSettings={() => (view = 'settings')}
+				onHowTo={() => (view = 'howto')}
+			/>
+		{/if}
+	{/key}
 </div>

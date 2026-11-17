@@ -1,8 +1,14 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
+
 	let { onBack }: { onBack: () => void } = $props();
 </script>
 
-<main class="app howto">
+<main
+	class="app howto"
+	in:fly|global={{ y: 10, duration: transitionDuration($reducedMotion, 200) }}
+>
 	<header class="head">
 		<div>
 			<p class="kicker mono">REACTOR CONTROL // MANUAL</p>

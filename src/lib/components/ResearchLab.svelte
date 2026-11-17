@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { fade, fly } from 'svelte/transition';
 	import { UNLOCKS } from '../data/unlocks';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import { save, unlock } from '../stores/game';
 	import type { UnlockRecord } from '../types';
 
@@ -32,7 +34,7 @@
 	}
 </script>
 
-<main class="app lab">
+<main class="app lab" in:fly|global={{ y: 10, duration: transitionDuration($reducedMotion, 200) }}>
 	<header class="head">
 		<div>
 			<p class="kicker mono">BETWEEN RUNS // META PROGRESSION</p>
@@ -81,7 +83,12 @@
 	{/each}
 
 	{#if confirming}
-		<div class="confirm" role="dialog" aria-label="Confirm research purchase">
+		<div
+			class="confirm"
+			role="dialog"
+			aria-label="Confirm research purchase"
+			transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}
+		>
 			<h2>Spend research?</h2>
 			<p>
 				Buy <strong>{confirming.name}</strong> for

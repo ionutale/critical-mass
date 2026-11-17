@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { fade, fly } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../data/elements';
 	import type { PlacementPreview } from '../game/fusion';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 
 	let {
 		preview,
@@ -18,12 +20,13 @@
 	const last = $derived(preview.steps.at(-1) ?? null);
 </script>
 
-<div class="backdrop">
+<div class="backdrop" transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}>
 	<div
 		class="preview"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Preview"
+		in:fly={{ y: 8, duration: transitionDuration($reducedMotion, 180) }}
 		use:trapFocus={{ onEscape: onCancel }}
 	>
 		<p class="kicker">CHAIN PREVIEW</p>

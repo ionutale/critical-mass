@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { fade, fly } from 'svelte/transition';
+	import { reducedMotion, transitionDuration } from '../stores/motion';
 	import { resetAll, resetRun, save, setSetting } from '../stores/game';
 
 	let { onBack }: { onBack: () => void } = $props();
@@ -18,7 +20,10 @@
 	}
 </script>
 
-<main class="app settings">
+<main
+	class="app settings"
+	in:fly|global={{ y: 10, duration: transitionDuration($reducedMotion, 200) }}
+>
 	<header class="head">
 		<div>
 			<p class="kicker mono">REACTOR CONTROL // PREFERENCES</p>
@@ -81,7 +86,12 @@
 		</div>
 
 		{#if confirming === 'run'}
-			<div class="confirm" role="dialog" aria-label="Confirm reset run">
+			<div
+				class="confirm"
+				role="dialog"
+				aria-label="Confirm reset run"
+				transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}
+			>
 				<h3>Clear the active run?</h3>
 				<p>Research, unlocks, and statistics stay.</p>
 				<div class="confirm-actions">
@@ -90,7 +100,12 @@
 				</div>
 			</div>
 		{:else if confirming === 'all'}
-			<div class="confirm" role="dialog" aria-label="Confirm reset all progress">
+			<div
+				class="confirm"
+				role="dialog"
+				aria-label="Confirm reset all progress"
+				transition:fade={{ duration: transitionDuration($reducedMotion, 180) }}
+			>
 				<h3>Clear all progress?</h3>
 				<p>This clears the run, research, unlocks, and statistics. Settings stay.</p>
 				<div class="confirm-actions">
