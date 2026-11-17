@@ -6,11 +6,13 @@
 	let {
 		preview,
 		onConfirm,
-		onCancel
+		onCancel,
+		onChoose
 	}: {
 		preview: PlacementPreview;
 		onConfirm: () => void;
 		onCancel: () => void;
+		onChoose: (step: number, option: number) => void;
 	} = $props();
 
 	const last = $derived(preview.steps.at(-1) ?? null);
@@ -30,11 +32,29 @@
 			<ol>
 				{#each preview.steps as step, index (step.step)}
 					<li class="chain-step" style:animation-delay={`${index * 90}ms`}>
-						<span>{ELEMENT_BY_SYMBOL.get(step.a)?.name ?? step.a}</span>
-						<span class="op">+</span>
-						<span>{ELEMENT_BY_SYMBOL.get(step.b)?.name ?? step.b}</span>
-						<span class="op">→</span>
-						<strong>{ELEMENT_BY_SYMBOL.get(step.result)?.name ?? step.result}</strong>
+						<p class="equation">
+							<span>{ELEMENT_BY_SYMBOL.get(step.a)?.name ?? step.a}</span>
+							<span class="op">+</span>
+							<span>{ELEMENT_BY_SYMBOL.get(step.b)?.name ?? step.b}</span>
+							<span class="op">→</span>
+							<strong>{ELEMENT_BY_SYMBOL.get(step.result)?.name ?? step.result}</strong>
+						</p>
+						<div class="options" role="group" aria-label={`Step ${step.step} options`}>
+							{#each step.options as option, optionIndex (optionIndex)}
+								<button
+									type="button"
+									class="option"
+									aria-pressed={step.choice === optionIndex}
+									onclick={() => onChoose(index, optionIndex)}
+								>
+									<span class="mono">
+										{ELEMENT_BY_SYMBOL.get(option.other)?.symbol ?? option.other} →
+										{ELEMENT_BY_SYMBOL.get(option.result)?.symbol ?? option.result}
+									</span>
+									<span class="cost mono">+{option.pressure}</span>
+								</button>
+							{/each}
+						</div>
 					</li>
 				{/each}
 			</ol>
@@ -138,15 +158,52 @@
 	}
 
 	li {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: baseline;
-		gap: 6px;
+		display: block;
 		padding: 8px 10px;
 		font-size: 13px;
 		background: var(--panel-2);
 		border-left: 2px solid var(--cyan);
 		border-radius: 4px;
+	}
+
+	.equation {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: 6px;
+		margin: 0;
+	}
+
+	.options {
+		display: grid;
+		gap: 6px;
+		margin-top: 8px;
+	}
+
+	.option {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		min-height: 44px;
+		padding: 4px 8px;
+		font-size: 12px;
+		text-align: left;
+		color: var(--muted);
+		background: rgba(56, 225, 255, 0.04);
+		border: 1px solid var(--line);
+		border-radius: 6px;
+	}
+
+	.option[aria-pressed='true'] {
+		color: var(--text);
+		background: rgba(56, 225, 255, 0.14);
+		border-color: var(--cyan);
+		box-shadow: inset 0 0 10px rgba(56, 225, 255, 0.12);
+	}
+
+	.cost {
+		color: var(--magenta);
 	}
 
 	strong {

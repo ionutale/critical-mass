@@ -67,10 +67,10 @@ function commit(nextRun: RunState): void {
 	});
 }
 
-export function place(handIndex: number, cell: number): void {
+export function place(handIndex: number, cell: number, choices: readonly number[] = []): void {
 	const current = get(run);
 	if (!current) return;
-	commit(placeCard(current, handIndex, cell, ELEMENTS, RECIPES));
+	commit(placeCard(current, handIndex, cell, ELEMENTS, RECIPES, choices));
 }
 
 export function vent(handIndex: number): void {

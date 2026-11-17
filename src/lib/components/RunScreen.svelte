@@ -36,6 +36,7 @@
 	let selected = $state<number | null>(null);
 	let targetCell = $state<number | null>(null);
 	let preview = $state<PlacementPreview | null>(null);
+	let choices = $state<number[]>([]);
 	let ventOpen = $state(false);
 	let scrapping = $state(false);
 	let burst = $state(0);
@@ -75,10 +76,20 @@
 			return;
 		}
 		if (selected === null || !$run) return;
-		const result = previewPlacement($run, selected, cell, ELEMENTS, RECIPES);
+		choices = [];
+		const result = previewPlacement($run, selected, cell, ELEMENTS, RECIPES, choices);
 		if (!result) return;
 		preview = result;
 		targetCell = cell;
+	}
+
+	function chooseBranch(step: number, option: number): void {
+		if (!preview || selected === null || targetCell === null || !$run) return;
+		const next = [...choices];
+		while (next.length < preview.steps.length) next.push(0);
+		next[step] = option;
+		choices = next;
+		preview = previewPlacement($run, selected, targetCell, ELEMENTS, RECIPES, choices);
 	}
 
 	$effect(() => {
@@ -93,7 +104,8 @@
 		if (locked || selected === null || targetCell === null) return;
 		playSound('fusion');
 		burst += 1;
-		place(selected, targetCell);
+		place(selected, targetCell, choices);
+		choices = [];
 		selected = null;
 		targetCell = null;
 		preview = null;
@@ -106,6 +118,7 @@
 	}
 
 	function cancel(): void {
+		choices = [];
 		preview = null;
 		targetCell = null;
 	}
@@ -237,7 +250,7 @@
 	</main>
 
 	{#if preview && selected !== null}
-		<PreviewOverlay {preview} onConfirm={confirm} onCancel={cancel} />
+		<PreviewOverlay {preview} onConfirm={confirm} onCancel={cancel} onChoose={chooseBranch} />
 	{/if}
 
 	{#if $run.pendingDraft}

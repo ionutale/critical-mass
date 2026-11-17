@@ -76,6 +76,37 @@ describe('fusion', () => {
 		expect(next.pressure).toBe(preview.pressureAfter);
 	});
 
+	it('applies the chosen option at each step and commits the previewed branch', () => {
+		const grid = emptyGrid();
+		grid[7] = 'Be';
+		grid[13] = 'C';
+		grid[17] = 'He';
+		grid[11] = 'He';
+		const run = runFixture({ grid, hand: ['He'] });
+
+		const preview = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [1, 0])!;
+		expect(preview.steps.length).toBeGreaterThanOrEqual(2);
+		expect(preview.steps[0].options[0]).toEqual({
+			cell: 7,
+			other: 'Be',
+			result: 'C',
+			pressure: 7
+		});
+		expect(preview.steps[0].choice).toBe(1);
+		expect(preview.steps[0].result).toBe('O');
+		expect(preview.steps[1].options.length).toBeGreaterThanOrEqual(2);
+		expect(preview.steps[1].choice).toBe(0);
+		expect(preview.steps[1].cell).toBe(preview.steps[1].options[0].cell);
+
+		const committed = placeCard(run, 0, 12, ELEMENTS, RECIPES, [1, 0]);
+		expect(committed.grid).toEqual(preview.grid);
+		expect(committed.pressure).toBe(preview.pressureAfter);
+
+		const other = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [1, 1])!;
+		expect(other.steps[1].cell).not.toBe(preview.steps[1].cell);
+		expect(other.steps[1].result).toBe(preview.steps[1].result);
+	});
+
 	it('leaves a lone tile unfused and marks a meltdown at the cap', () => {
 		const lone = runFixture({ hand: ['H'] });
 		expect(previewPlacement(lone, 0, 0, ELEMENTS, RECIPES)!.steps).toEqual([]);
