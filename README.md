@@ -36,7 +36,7 @@ pnpm deploy        # build and deploy to Cloudflare Workers
 - The reactor is a 5×5 grid. Placing a card on an empty cell adds the tile and discards the card.
 - Only the **placed tile** fuses. Its neighbours resolve in **N → E → S → W** order, repeating until no more recipes match, so one placement can chain.
 - Each recipe is an unordered pair (some need the Catalyst). The preview must equal the commit: same steps, same result tile, same pressure.
-- Placing costs pressure `4 + tier + 2 × chain index` (heavy results add 8, reduced by modules). Meltdown happens when pressure reaches the current cap.
+- Placing costs pressure `10 + tier + 4 × chain index` (heavy results add 8, reduced by modules). Meltdown happens when pressure reaches the current cap.
 - The deck cannot starve: hand refills after each turn, discards reshuffle.
 
 ## Pressure and soft locks
@@ -50,11 +50,11 @@ pnpm deploy        # build and deploy to Cloudflare Workers
 
 All content is typed data under `src/lib/data/`:
 
-- `elements.ts` — 24 elements with tiers and heavy flags.
+- `elements.ts` — 30 elements with tiers and heavy flags.
 - `recipes.ts` — fusion pairs, optionally Catalyst-only.
-- `contracts.ts` — 30 templates across 3 sectors × 5 slots × 2 variants.
+- `contracts.ts` — 45 templates across 3 sectors × 5 slots × 3 variants.
 - `modules.ts` and `patches.ts` — reactor effects.
-- `unlocks.ts` — 12 meta research nodes.
+- `unlocks.ts` — 16 meta research nodes.
 
 Run `pnpm validate` after editing. It enforces the launch counts, recipe reachability, unique ids, contract sectors, module effects, and unlock costs.
 

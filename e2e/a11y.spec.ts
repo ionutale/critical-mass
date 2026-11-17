@@ -61,6 +61,9 @@ function saveFixture(overrides: Record<string, unknown> = {}): SaveState {
 }
 
 async function seed(page: Page, overrides: Record<string, unknown> = {}) {
+	// Keep axe runs stable: the saved setting only applies after mount, so the
+	// OS preference must also be reduced to stop the first entrance transition.
+	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await page.addInitScript(
 		([key, save]) => localStorage.setItem(key, save),
 		[SAVE_KEY, JSON.stringify(saveFixture(overrides))]
