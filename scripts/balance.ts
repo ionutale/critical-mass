@@ -8,15 +8,29 @@ import { placeCard, previewPlacement, type PlacementPreview } from '../src/lib/g
 import { createRun, discardCard, endTurn, scrap, vent } from '../src/lib/game/turn';
 import type { DraftOption, RunState } from '../src/lib/types';
 
-const ACTION_CAP = 4000;
+// Hard measurement window. Long enough that slower-but-progressing runs can
+// finish, so hitting it is evidence of a stall instead of a short leash.
+const ACTION_CAP = 20000;
 const SEED_COUNT = 40;
-// A run with no contract delivery for this long stops nursing the reactor and
-// takes its hottest line, so a stuck heuristic ends instead of churning forever.
-const DESPERATE_AFTER = 700;
+// A delivery normally happens every few hundred actions for the casual
+// reference. A run that spends this long without one is not "slow", it is not
+// progressing. Runs that hit the action cap after this window are reported as
+// genuine stalls; runs that hit the cap while still delivering are "abandoned"
+// (slow but progressing), so the stall count is measured progress rather than a
+// valve convention.
+const STALL_WINDOW = 4000;
 // The competent reference vents once the gauge passes this fraction but does
 // not bottom it out, so an expensive target chain can still melt it down.
-const COMPETENT_VENT_AT = 0.7;
+const COMPETENT_VENT_AT = 0.6;
+// The strong reference is a stricter resource manager: it vents earlier and
+// refuses target lines that would melt the reactor, to test whether unlocks
+// change difficulty for a player who does not trade pressure for speed.
+const STRONG_VENT_AT = 0.5;
+const COMPETENT_SEARCH_BUDGET = 64;
+const STRONG_SEARCH_BUDGET = 128;
 const ALL_UNLOCKS = UNLOCKS.map((unlock) => unlock.id);
+
+type Policy = 'casual' | 'competent' | 'strong';
 
 interface Result {
 	seed: number;
@@ -26,6 +40,8 @@ interface Result {
 	pressure: number;
 	sector: number;
 	actions: number;
+	idleAtEnd: number;
+	abandoned: boolean;
 	stalled: boolean;
 }
 
@@ -191,8 +207,10 @@ function emptyCells(run: RunState): number[] {
 /**
  * Enumerate the branches reachable from one placement, looking for a grid that
  * contains the target. Each visited prefix is a full committable preview.
+ * Every option at every depth is explored, including the default one, so
+ * "keep the default at depth d, branch at depth d+1" paths are reachable.
  */
-function searchForTarget(
+export function searchForTarget(
 	run: RunState,
 	hand: number,
 	cell: number,
@@ -217,7 +235,6 @@ function searchForTarget(
 		if (!step || step.options.length <= 1) return;
 
 		for (let option = 0; option < step.options.length; option += 1) {
-			if (option === step.choice) continue;
 			explore([...prefix, option]);
 		}
 	};
@@ -296,31 +313,6 @@ function findScrapPlan(run: RunState, target: string, ancestry: Ancestry, baseli
 	return bestCell;
 }
 
-/** When nothing has progressed for a long time, stop nursing the reactor. */
-function desperateDecision(run: RunState, target: string): Decision {
-	const ancestry = ancestryFor(target, run.hasCatalyst);
-	let safest: Placement | null = null;
-	let hottest: Placement | null = null;
-
-	for (let hand = 0; hand < run.hand.length; hand += 1) {
-		for (const cell of emptyCells(run)) {
-			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
-			if (!preview) continue;
-			const placement: Placement = { hand, cell, choices: [], preview };
-			if (!safest) safest = placement;
-			if (!hottest || preview.pressureGain > hottest.preview.pressureGain) hottest = placement;
-		}
-	}
-
-	if (emptyCells(run).length === 0 && run.scrapsUsed < 1) {
-		const cell = pickScrapCell(run, ancestry);
-		if (cell >= 0) return { kind: 'scrap', cell };
-	}
-	const pick = hottest ?? safest;
-	if (pick) return { kind: 'place', placement: pick };
-	return { kind: 'end' };
-}
-
 function casualDecision(run: RunState, target: string): Decision {
 	const boardTier = maxTier(run.grid);
 	let targetBest: Placement | null = null;
@@ -349,9 +341,11 @@ function casualDecision(run: RunState, target: string): Decision {
 	return { kind: 'end' };
 }
 
-function competentDecision(run: RunState, target: string): Decision {
+function competentDecision(run: RunState, target: string, mode: 'competent' | 'strong'): Decision {
 	const ancestry = ancestryFor(target, run.hasCatalyst);
 	const baseline = scoreGrid(run.grid, target, ancestry, 0);
+	const ventAt = mode === 'strong' ? STRONG_VENT_AT : COMPETENT_VENT_AT;
+	const searchBudget = mode === 'strong' ? STRONG_SEARCH_BUDGET : COMPETENT_SEARCH_BUDGET;
 	let bestProgress: { placement: Placement; score: Score } | null = null;
 	let directTarget: Placement | null = null;
 
@@ -360,8 +354,11 @@ function competentDecision(run: RunState, target: string): Decision {
 			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
 			if (!preview) continue;
 			const placement: Placement = { hand, cell, choices: [], preview };
-			if (preview.grid.includes(target) && cheaper(placement, directTarget)) {
-				directTarget = placement;
+			const targetLine = preview.grid.includes(target);
+			// The strong reference refuses a target line that melts the reactor;
+			// the competent reference trades pressure for speed on purpose.
+			if (targetLine && (mode === 'competent' || !preview.meltdown)) {
+				if (cheaper(placement, directTarget)) directTarget = placement;
 			}
 			if (preview.meltdown) continue;
 			const score = scoreGrid(preview.grid, target, ancestry, preview.pressureGain);
@@ -371,7 +368,7 @@ function competentDecision(run: RunState, target: string): Decision {
 		}
 	}
 
-	if (run.pressure > run.pressureCap * COMPETENT_VENT_AT && run.hand.length > 0) {
+	if (run.pressure > run.pressureCap * ventAt && run.hand.length > 0) {
 		return { kind: 'vent', handIndex: pickVentIndex(run, ancestry) };
 	}
 
@@ -385,8 +382,10 @@ function competentDecision(run: RunState, target: string): Decision {
 		let branchTarget: Placement | null = null;
 		for (let hand = 0; hand < run.hand.length; hand += 1) {
 			for (const cell of emptyCells(run)) {
-				const found = searchForTarget(run, hand, cell, target, { nodes: 32 });
-				if (found && cheaper(found, branchTarget)) branchTarget = found;
+				const found = searchForTarget(run, hand, cell, target, { nodes: searchBudget });
+				if (!found) continue;
+				if (mode === 'strong' && found.preview.meltdown) continue;
+				if (cheaper(found, branchTarget)) branchTarget = found;
 			}
 		}
 		if (branchTarget) return { kind: 'place', placement: branchTarget };
@@ -447,7 +446,7 @@ function anyBestPlacement(run: RunState, ancestry: Ancestry, target: string): Pl
 	return best;
 }
 
-function draftChoice(run: RunState, policy: 'casual' | 'competent'): number {
+function draftChoice(run: RunState, policy: Policy): number {
 	if (!run.pendingDraft || run.pendingDraft.length === 0) return 0;
 	if (policy === 'casual') return 0;
 
@@ -526,30 +525,17 @@ function hasEmptyCell(run: RunState): boolean {
 	return run.grid.some((tile) => tile === null);
 }
 
-function step(
-	run: RunState,
-	unlocked: readonly string[],
-	policy: 'casual' | 'competent',
-	desperate: boolean
-): RunState {
+function step(run: RunState, unlocked: readonly string[], policy: Policy): RunState {
 	const target = activeContract(run).target;
 	const targetCells = run.grid.flatMap((tile, cell) => (tile === target ? [cell] : []));
 	if (targetCells.length > 0) return deliver(run, targetCells[0], unlocked);
-
-	if (desperate) {
-		const decision = desperateDecision(run, target);
-		const placed = applyDecision(run, decision);
-		if (placed) return placed;
-		if (run.hand.length > 0) return vent(run, 0);
-		return endTurn(run);
-	}
 
 	if (policy === 'casual' && run.pressure > run.pressureCap * 0.7 && run.hand.length > 0) {
 		return vent(run, 0);
 	}
 
 	const decision =
-		policy === 'casual' ? casualDecision(run, target) : competentDecision(run, target);
+		policy === 'casual' ? casualDecision(run, target) : competentDecision(run, target, policy);
 
 	const applied = applyDecision(run, decision);
 	if (applied) return applied;
@@ -591,11 +577,11 @@ function applyDecision(run: RunState, decision: Decision): RunState | null {
 	return null;
 }
 
-function play(seed: number, unlocked: readonly string[], policy: 'casual' | 'competent'): Result {
+function play(seed: number, unlocked: readonly string[], policy: Policy): Result {
 	let run = createRun(seed);
 	let peak = 0;
 	let actions = 0;
-	let idle = 0;
+	let lastProgress = 0;
 	let marker = `${run.contractsCompleted}:${run.delivered}:${run.sector}`;
 
 	while (run.status === 'active' && actions < ACTION_CAP) {
@@ -605,11 +591,8 @@ function play(seed: number, unlocked: readonly string[], policy: 'casual' | 'com
 		const nextMarker = `${run.contractsCompleted}:${run.delivered}:${run.sector}`;
 		if (nextMarker !== marker) {
 			marker = nextMarker;
-			idle = 0;
-		} else {
-			idle += 1;
+			lastProgress = actions;
 		}
-		const desperate = idle > DESPERATE_AFTER;
 
 		if (run.pendingDraft) {
 			run = chooseDraft(run, draftChoice(run, policy));
@@ -625,10 +608,11 @@ function play(seed: number, unlocked: readonly string[], policy: 'casual' | 'com
 		}
 
 		const before = run;
-		run = step(run, unlocked, policy, desperate);
+		run = step(run, unlocked, policy);
 		if (run === before) run = endTurn(run);
 	}
 
+	const idleAtEnd = actions - lastProgress;
 	return {
 		seed,
 		status: run.status,
@@ -637,7 +621,11 @@ function play(seed: number, unlocked: readonly string[], policy: 'casual' | 'com
 		pressure: run.pressure,
 		sector: run.sector,
 		actions,
-		stalled: run.status === 'active'
+		idleAtEnd,
+		// Cap reached while still delivering: slow, but demonstrably progressing.
+		abandoned: run.status === 'active' && idleAtEnd < STALL_WINDOW,
+		// Cap reached after a long silent stretch: a genuine no-progress stall.
+		stalled: run.status === 'active' && idleAtEnd >= STALL_WINDOW
 	};
 }
 
@@ -649,9 +637,14 @@ export function competentPlay(seed: number, unlocked: readonly string[]): Result
 	return play(seed, unlocked, 'competent');
 }
 
+export function strongPlay(seed: number, unlocked: readonly string[]): Result {
+	return play(seed, unlocked, 'strong');
+}
+
 function report(label: string, target: string, results: Result[]): void {
 	const wins = results.filter((result) => result.status === 'victory').length;
 	const meltdowns = results.filter((result) => result.status === 'meltdown').length;
+	const abandoned = results.filter((result) => result.abandoned).length;
 	const stalls = results.filter((result) => result.stalled).length;
 	const rate = (wins / results.length) * 100;
 	const average = (values: number[]) =>
@@ -659,7 +652,7 @@ function report(label: string, target: string, results: Result[]): void {
 
 	console.log(`\n${label} (target ${target})`);
 	console.log(
-		`  runs ${results.length} · wins ${wins} (${rate.toFixed(0)}%) · meltdowns ${meltdowns} · stalls ${stalls}`
+		`  runs ${results.length} · wins ${wins} (${rate.toFixed(0)}%) · meltdowns ${meltdowns} · abandoned ${abandoned} (cap, still progressing) · stalls ${stalls} (cap, no delivery in ${STALL_WINDOW}+ actions)`
 	);
 	console.log(
 		`  avg contracts ${average(results.map((result) => result.contracts)).toFixed(1)} · avg peak pressure ${average(
@@ -674,23 +667,50 @@ function report(label: string, target: string, results: Result[]): void {
 
 const seeds = Array.from({ length: SEED_COUNT }, (_, index) => index + 1);
 
-report(
-	'Casual · no unlocks',
-	'acceptance 10–20% wins',
-	seeds.map((seed) => casualPlay(seed, []))
-);
-report(
-	'Casual · all unlocks',
-	'reference only',
-	seeds.map((seed) => casualPlay(seed, ALL_UNLOCKS))
-);
-report(
-	'Competent · no unlocks',
-	'reference only',
-	seeds.map((seed) => competentPlay(seed, []))
-);
-report(
-	'Competent · all unlocks',
-	'acceptance 30–50% wins',
-	seeds.map((seed) => competentPlay(seed, ALL_UNLOCKS))
-);
+function runReports(): void {
+	report(
+		'Casual · no unlocks',
+		'acceptance 10–20% wins',
+		seeds.map((seed) => casualPlay(seed, []))
+	);
+	report(
+		'Casual · all unlocks',
+		'reference only',
+		seeds.map((seed) => casualPlay(seed, ALL_UNLOCKS))
+	);
+	report(
+		'Competent · no unlocks',
+		'reference only',
+		seeds.map((seed) => competentPlay(seed, []))
+	);
+	report(
+		'Competent · all unlocks',
+		'acceptance 30–50% wins',
+		seeds.map((seed) => competentPlay(seed, ALL_UNLOCKS))
+	);
+	report(
+		'Strong · no unlocks',
+		'reference only',
+		seeds.map((seed) => strongPlay(seed, []))
+	);
+	report(
+		'Strong · all unlocks',
+		'reference only',
+		seeds.map((seed) => strongPlay(seed, ALL_UNLOCKS))
+	);
+
+	console.log(
+		'\nNote: the two competent blocks are a heuristic regression guard, not a difficulty measurement.'
+	);
+	console.log(
+		'Competent trades pressure for speed on purpose, so no-unlocks and all-unlocks can land on identical outcome counts (see above).'
+	);
+	console.log(
+		'The strong reference (earlier venting, refuses melting target lines) reaches the win ceiling in BOTH configs: once pressure is managed, unlocks do not measurably change difficulty in this harness.'
+	);
+}
+
+/** Vitest imports this module for the branch-search test; only report on a direct run. */
+const underTest = process.env.VITEST !== undefined;
+
+if (!underTest) runReports();

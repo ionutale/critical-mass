@@ -27,7 +27,7 @@ describe('run screen', () => {
 
 		expect(screen.queryByRole('dialog', { name: /preview/i })).not.toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /cell 13/i })).toHaveTextContent('He');
-		expect(screen.getByLabelText(/pressure 7 of 100/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/pressure 11 of 100/i)).toBeInTheDocument();
 
 		await fireEvent.click(screen.getByRole('button', { name: /deliver helium/i }));
 
@@ -58,7 +58,7 @@ describe('run screen', () => {
 		const options = within(firstStep).getAllByRole('button');
 		expect(options).toHaveLength(3);
 		expect(options[0]).toHaveTextContent('Be → C');
-		expect(options[0]).toHaveTextContent('+9');
+		expect(options[0]).toHaveTextContent('+13');
 		for (const option of options) {
 			expect(option).not.toHaveAttribute('tabindex', '-1');
 		}
@@ -71,7 +71,7 @@ describe('run screen', () => {
 		const chosenStep = within(preview).getByRole('group', { name: /step 1 options/i });
 		expect(within(chosenStep).getAllByRole('button')[1]).toHaveAttribute('aria-pressed', 'true');
 		expect(preview).toHaveTextContent(/final tile: Ne/i);
-		expect(preview).toHaveTextContent('+25');
+		expect(preview).toHaveTextContent('+35');
 		expect(within(preview).getAllByRole('group')).toHaveLength(2);
 
 		const expected = previewPlacement(fixture, 0, 12, ELEMENTS, RECIPES, [1])!;
@@ -108,7 +108,7 @@ describe('run screen', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /cell 13/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
-		expect(screen.getByLabelText(/pressure 7 of 100/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/pressure 11 of 100/i)).toBeInTheDocument();
 
 		await fireEvent.click(screen.getByRole('button', { name: /vent/i }));
 		expect(screen.getByRole('dialog', { name: /vent pressure/i })).toBeInTheDocument();

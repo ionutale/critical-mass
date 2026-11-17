@@ -93,7 +93,7 @@ export function previewPlacement(
 
 			const heavyDiscount = optionElement.heavy ? heavyReduction(run) : 0;
 			const basePressure =
-				6 + optionElement.tier + 2 * index + (optionElement.heavy ? 8 : 0) - heavyDiscount;
+				10 + optionElement.tier + 4 * index + (optionElement.heavy ? 8 : 0) - heavyDiscount;
 			const chainDiscount = index === 0 ? 0 : Math.min(2 * index, chainReduction(run));
 			const pressure = Math.max(
 				1,
