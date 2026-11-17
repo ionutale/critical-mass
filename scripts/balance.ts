@@ -1,10 +1,22 @@
-import { ELEMENTS } from '../src/lib/data/elements';
+import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../src/lib/data/elements';
+import { MODULE_BY_ID } from '../src/lib/data/modules';
+import { PATCH_BY_ID } from '../src/lib/data/patches';
 import { RECIPES } from '../src/lib/data/recipes';
 import { UNLOCKS } from '../src/lib/data/unlocks';
 import { activeContract, chooseDraft, deliver, nextSector } from '../src/lib/game/contracts';
-import { previewPlacement, placeCard } from '../src/lib/game/fusion';
+import { placeCard, previewPlacement, type PlacementPreview } from '../src/lib/game/fusion';
 import { createRun, discardCard, endTurn, scrap, vent } from '../src/lib/game/turn';
-import type { RunState } from '../src/lib/types';
+import type { DraftOption, RunState } from '../src/lib/types';
+
+const ACTION_CAP = 4000;
+const SEED_COUNT = 40;
+// A run with no contract delivery for this long stops nursing the reactor and
+// takes its hottest line, so a stuck heuristic ends instead of churning forever.
+const DESPERATE_AFTER = 700;
+// The competent reference vents once the gauge passes this fraction but does
+// not bottom it out, so an expensive target chain can still melt it down.
+const COMPETENT_VENT_AT = 0.7;
+const ALL_UNLOCKS = UNLOCKS.map((unlock) => unlock.id);
 
 interface Result {
 	seed: number;
@@ -14,21 +26,593 @@ interface Result {
 	pressure: number;
 	sector: number;
 	actions: number;
+	stalled: boolean;
 }
 
-const ALL_UNLOCKS = UNLOCKS.map((unlock) => unlock.id);
+interface Placement {
+	hand: number;
+	cell: number;
+	choices: number[];
+	preview: PlacementPreview;
+}
 
-function play(seed: number, unlocked: readonly string[]): Result {
+interface Score {
+	hasTarget: boolean;
+	directCount: number;
+	maxAncestorTier: number;
+	ancestorCount: number;
+	ancestorPairs: number;
+	minDistance: number;
+	gain: number;
+}
+
+interface Ancestry {
+	distance: Map<string, number>;
+	pairs: Array<[string, string]>;
+	ancestors: Set<string>;
+}
+
+function tierOf(symbol: string): number {
+	return ELEMENT_BY_SYMBOL.get(symbol)?.tier ?? 0;
+}
+
+function maxTier(grid: readonly (string | null)[]): number {
+	let best = -1;
+	for (const tile of grid) {
+		if (tile) best = Math.max(best, tierOf(tile));
+	}
+	return best;
+}
+
+const ANCESTRY_CACHE = new Map<string, Ancestry>();
+
+/**
+ * For a target, how many fusions each element is away from it (0 = target),
+ * the target's direct ingredients, and every element on a working ladder
+ * toward it. Transitive: an element is an ancestor only if higher tiers can
+ * still reach the target, so e.g. Si is not an ancestor of Mg.
+ */
+function ancestryFor(target: string, allowCatalyst: boolean): Ancestry {
+	const key = `${target}:${allowCatalyst ? 1 : 0}`;
+	const cached = ANCESTRY_CACHE.get(key);
+	if (cached) return cached;
+
+	const distance = new Map<string, number>([[target, 0]]);
+	let changed = true;
+	while (changed) {
+		changed = false;
+		for (const recipe of RECIPES) {
+			if (recipe.catalyst && !allowCatalyst) continue;
+			const result = distance.get(recipe.result);
+			if (result === undefined) continue;
+			for (const ingredient of [recipe.a, recipe.b]) {
+				const next = result + 1;
+				const current = distance.get(ingredient);
+				if (current === undefined || next < current) {
+					distance.set(ingredient, next);
+					changed = true;
+				}
+			}
+		}
+	}
+
+	const pairs: Array<[string, string]> = [];
+	for (const recipe of RECIPES) {
+		if (recipe.catalyst && !allowCatalyst) continue;
+		if (recipe.result !== target) continue;
+		pairs.push([recipe.a, recipe.b]);
+	}
+
+	const ancestry: Ancestry = { distance, pairs, ancestors: new Set(distance.keys()) };
+	ANCESTRY_CACHE.set(key, ancestry);
+	return ancestry;
+}
+
+function scoreGrid(
+	grid: readonly (string | null)[],
+	target: string,
+	ancestry: Ancestry,
+	gain: number
+): Score {
+	const counts = new Map<string, number>();
+	let hasTarget = false;
+	let minDistance = Number.POSITIVE_INFINITY;
+	let maxAncestorTier = -1;
+
+	for (const tile of grid) {
+		if (!tile) continue;
+		counts.set(tile, (counts.get(tile) ?? 0) + 1);
+		if (tile === target) hasTarget = true;
+		const distance = ancestry.distance.get(tile);
+		if (distance === undefined) continue;
+		minDistance = Math.min(minDistance, distance);
+		maxAncestorTier = Math.max(maxAncestorTier, tierOf(tile));
+	}
+
+	let directCount = 0;
+	for (const [a, b] of ancestry.pairs) {
+		let present = 0;
+		if (counts.has(a)) present += 1;
+		if (b !== a && counts.has(b)) present += 1;
+		directCount = Math.max(directCount, present);
+	}
+
+	let ancestorCount = 0;
+	let ancestorPairs = 0;
+	for (const [tile, count] of counts) {
+		if (!ancestry.ancestors.has(tile)) continue;
+		ancestorCount += 1;
+		if (count >= 2) ancestorPairs += 1;
+	}
+
+	return {
+		hasTarget,
+		directCount,
+		maxAncestorTier,
+		ancestorCount,
+		ancestorPairs,
+		minDistance,
+		gain
+	};
+}
+
+function better(a: Score, b: Score | null): boolean {
+	if (!b) return true;
+	if (a.hasTarget !== b.hasTarget) return a.hasTarget;
+	if (a.directCount !== b.directCount) return a.directCount > b.directCount;
+	if (a.maxAncestorTier !== b.maxAncestorTier) return a.maxAncestorTier > b.maxAncestorTier;
+	if (a.ancestorCount !== b.ancestorCount) return a.ancestorCount > b.ancestorCount;
+	if (a.ancestorPairs !== b.ancestorPairs) return a.ancestorPairs > b.ancestorPairs;
+	if (a.minDistance !== b.minDistance) return a.minDistance < b.minDistance;
+	return a.gain < b.gain;
+}
+
+/** Progress means the board's ladder toward the target actually moved. */
+function progresses(score: Score, baseline: Score): boolean {
+	if (score.hasTarget) return true;
+	if (score.directCount !== baseline.directCount) return score.directCount > baseline.directCount;
+	if (score.maxAncestorTier !== baseline.maxAncestorTier) {
+		return score.maxAncestorTier > baseline.maxAncestorTier;
+	}
+	if (score.ancestorCount !== baseline.ancestorCount) {
+		return score.ancestorCount > baseline.ancestorCount;
+	}
+	return score.ancestorPairs > baseline.ancestorPairs;
+}
+
+function cheaper(a: Placement, b: Placement | null): boolean {
+	return !b || a.preview.pressureGain < b.preview.pressureGain;
+}
+
+function emptyCells(run: RunState): number[] {
+	return run.grid.flatMap((tile, cell) => (tile === null ? [cell] : []));
+}
+
+/**
+ * Enumerate the branches reachable from one placement, looking for a grid that
+ * contains the target. Each visited prefix is a full committable preview.
+ */
+function searchForTarget(
+	run: RunState,
+	hand: number,
+	cell: number,
+	target: string,
+	budget: { nodes: number }
+): Placement | null {
+	let best: Placement | null = null;
+
+	const explore = (prefix: number[]) => {
+		if (budget.nodes <= 0) return;
+		budget.nodes -= 1;
+
+		const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES, prefix);
+		if (!preview) return;
+
+		if (preview.grid.includes(target)) {
+			const placement: Placement = { hand, cell, choices: [...prefix], preview };
+			if (cheaper(placement, best)) best = placement;
+		}
+
+		const step = preview.steps[prefix.length];
+		if (!step || step.options.length <= 1) return;
+
+		for (let option = 0; option < step.options.length; option += 1) {
+			if (option === step.choice) continue;
+			explore([...prefix, option]);
+		}
+	};
+
+	explore([]);
+	return best;
+}
+
+interface Decision {
+	kind: 'place' | 'vent' | 'scrap' | 'end';
+	placement?: Placement;
+	handIndex?: number;
+	cell?: number;
+}
+
+/** Lowest ladder value in hand: the card we can most afford to cycle away. */
+function pickVentIndex(run: RunState, ancestry: Ancestry): number {
+	let best = 0;
+	let bestScore = Number.NEGATIVE_INFINITY;
+	run.hand.forEach((card, index) => {
+		const distance = ancestry.distance.get(card);
+		const score = distance === undefined ? 1000 : distance * 10 + tierOf(card);
+		if (score > bestScore) {
+			bestScore = score;
+			best = index;
+		}
+	});
+	return best;
+}
+
+function pickScrapCell(run: RunState, ancestry: Ancestry): number {
+	let best = -1;
+	let bestScore = Number.NEGATIVE_INFINITY;
+	run.grid.forEach((tile, cell) => {
+		if (!tile) return;
+		const distance = ancestry.distance.get(tile);
+		const score = distance === undefined ? 1000 : distance * 100 - tierOf(tile);
+		if (score > bestScore) {
+			bestScore = score;
+			best = cell;
+		}
+	});
+	return best;
+}
+
+/**
+ * Try each occupied cell as a hole and see if a placement through that hole
+ * reaches the target or advances the ladder. This is how the policy opens up
+ * "blocked" geometry (for example fusing C + N into F behind a wall of tiles).
+ */
+function findScrapPlan(run: RunState, target: string, ancestry: Ancestry, baseline: Score): number {
+	if (run.scrapsUsed >= 1) return -1;
+	let bestCell = -1;
+	let bestScore: Score | null = null;
+
+	for (let cell = 0; cell < run.grid.length; cell += 1) {
+		if (!run.grid[cell]) continue;
+		const after = scrap(run, cell);
+		if (after === run) continue;
+
+		for (let hand = 0; hand < after.hand.length; hand += 1) {
+			for (const spot of emptyCells(after)) {
+				const preview = previewPlacement(after, hand, spot, ELEMENTS, RECIPES);
+				if (!preview || preview.meltdown) continue;
+				const score = scoreGrid(preview.grid, target, ancestry, preview.pressureGain);
+				if (score.hasTarget || progresses(score, baseline)) {
+					if (!bestScore || better(score, bestScore)) {
+						bestScore = score;
+						bestCell = cell;
+					}
+				}
+			}
+		}
+	}
+
+	return bestCell;
+}
+
+/** When nothing has progressed for a long time, stop nursing the reactor. */
+function desperateDecision(run: RunState, target: string): Decision {
+	const ancestry = ancestryFor(target, run.hasCatalyst);
+	let safest: Placement | null = null;
+	let hottest: Placement | null = null;
+
+	for (let hand = 0; hand < run.hand.length; hand += 1) {
+		for (const cell of emptyCells(run)) {
+			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			if (!preview) continue;
+			const placement: Placement = { hand, cell, choices: [], preview };
+			if (!safest) safest = placement;
+			if (!hottest || preview.pressureGain > hottest.preview.pressureGain) hottest = placement;
+		}
+	}
+
+	if (emptyCells(run).length === 0 && run.scrapsUsed < 1) {
+		const cell = pickScrapCell(run, ancestry);
+		if (cell >= 0) return { kind: 'scrap', cell };
+	}
+	const pick = hottest ?? safest;
+	if (pick) return { kind: 'place', placement: pick };
+	return { kind: 'end' };
+}
+
+function casualDecision(run: RunState, target: string): Decision {
+	const boardTier = maxTier(run.grid);
+	let targetBest: Placement | null = null;
+	let advanceBest: Placement | null = null;
+	let safeBest: Placement | null = null;
+
+	for (let hand = 0; hand < run.hand.length; hand += 1) {
+		for (const cell of emptyCells(run)) {
+			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			if (!preview || preview.meltdown) continue;
+			const placement: Placement = { hand, cell, choices: [], preview };
+
+			if (preview.grid.includes(target)) {
+				if (cheaper(placement, targetBest)) targetBest = placement;
+			} else if (maxTier(preview.grid) > boardTier) {
+				if (cheaper(placement, advanceBest)) advanceBest = placement;
+			} else if (cheaper(placement, safeBest)) {
+				safeBest = placement;
+			}
+		}
+	}
+
+	if (targetBest) return { kind: 'place', placement: targetBest };
+	if (advanceBest) return { kind: 'place', placement: advanceBest };
+	if (safeBest) return { kind: 'place', placement: safeBest };
+	return { kind: 'end' };
+}
+
+function competentDecision(run: RunState, target: string): Decision {
+	const ancestry = ancestryFor(target, run.hasCatalyst);
+	const baseline = scoreGrid(run.grid, target, ancestry, 0);
+	let bestProgress: { placement: Placement; score: Score } | null = null;
+	let directTarget: Placement | null = null;
+
+	for (let hand = 0; hand < run.hand.length; hand += 1) {
+		for (const cell of emptyCells(run)) {
+			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			if (!preview) continue;
+			const placement: Placement = { hand, cell, choices: [], preview };
+			if (preview.grid.includes(target) && cheaper(placement, directTarget)) {
+				directTarget = placement;
+			}
+			if (preview.meltdown) continue;
+			const score = scoreGrid(preview.grid, target, ancestry, preview.pressureGain);
+			if (bestProgress === null || better(score, bestProgress.score)) {
+				bestProgress = { placement, score };
+			}
+		}
+	}
+
+	if (run.pressure > run.pressureCap * COMPETENT_VENT_AT && run.hand.length > 0) {
+		return { kind: 'vent', handIndex: pickVentIndex(run, ancestry) };
+	}
+
+	// A target in reach wins now, even if the placement is expensive: the
+	// heuristic prefers the cheapest target line rather than hoarding pressure.
+	if (directTarget) return { kind: 'place', placement: directTarget };
+
+	// No default branch reaches the target: let the policy pick a different
+	// chain at each step and search for a path that does.
+	if (emptyCells(run).length > 0 && run.hand.length > 0) {
+		let branchTarget: Placement | null = null;
+		for (let hand = 0; hand < run.hand.length; hand += 1) {
+			for (const cell of emptyCells(run)) {
+				const found = searchForTarget(run, hand, cell, target, { nodes: 32 });
+				if (found && cheaper(found, branchTarget)) branchTarget = found;
+			}
+		}
+		if (branchTarget) return { kind: 'place', placement: branchTarget };
+	}
+
+	if (bestProgress && progresses(bestProgress.score, baseline)) {
+		return { kind: 'place', placement: bestProgress.placement };
+	}
+
+	// Open a blocking cell if doing so unlocks a target or a ladder step.
+	if (run.scrapsUsed < 1) {
+		const plan = findScrapPlan(run, target, ancestry, baseline);
+		if (plan >= 0) return { kind: 'scrap', cell: plan };
+	}
+
+	if (emptyCells(run).length === 0) {
+		if (run.scrapsUsed < 1) {
+			const cell = pickScrapCell(run, ancestry);
+			if (cell >= 0) return { kind: 'scrap', cell };
+		}
+		if (run.hand.length > 0) {
+			return { kind: 'vent', handIndex: pickVentIndex(run, ancestry) };
+		}
+		return { kind: 'end' };
+	}
+
+	if (run.hand.length > 0) {
+		// Cycle the least useful card; for a target-aware player this digs for
+		// the card the ladder is waiting on.
+		const index = pickVentIndex(run, ancestry);
+		const card = run.hand[index];
+		if (ancestry.distance.get(card) === undefined || run.pressure > run.sectorFloor) {
+			return { kind: 'vent', handIndex: index };
+		}
+	}
+
+	const fallback = anyBestPlacement(run, ancestry, target);
+	if (fallback) return { kind: 'place', placement: fallback };
+	if (run.hand.length > 0) return { kind: 'vent', handIndex: pickVentIndex(run, ancestry) };
+	return { kind: 'end' };
+}
+
+/** Last resort that always terminates: the best non-melting placement. */
+function anyBestPlacement(run: RunState, ancestry: Ancestry, target: string): Placement | null {
+	let best: Placement | null = null;
+	let bestScore: Score | null = null;
+	for (let hand = 0; hand < run.hand.length; hand += 1) {
+		for (const cell of emptyCells(run)) {
+			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			if (!preview || preview.meltdown) continue;
+			const score = scoreGrid(preview.grid, target, ancestry, preview.pressureGain);
+			if (!bestScore || better(score, bestScore)) {
+				bestScore = score;
+				best = { hand, cell, choices: [], preview };
+			}
+		}
+	}
+	return best;
+}
+
+function draftChoice(run: RunState, policy: 'casual' | 'competent'): number {
+	if (!run.pendingDraft || run.pendingDraft.length === 0) return 0;
+	if (policy === 'casual') return 0;
+
+	// The next contract variant is chosen before the option is applied, so any
+	// option can be used to peek at it.
+	const upcoming = activeContract(chooseDraft(run, 0));
+	const ancestry = ancestryFor(upcoming.target, run.hasCatalyst);
+
+	let best = 0;
+	let bestScore = Number.NEGATIVE_INFINITY;
+
+	run.pendingDraft.forEach((option, index) => {
+		const score = draftScore(option, run, ancestry);
+		if (score > bestScore) {
+			bestScore = score;
+			best = index;
+		}
+	});
+
+	return best;
+}
+
+function moduleScore(effect: string, run: RunState): number {
+	switch (effect) {
+		case 'catalyst':
+			return run.hasCatalyst ? 10 : 100;
+		case 'fusion-10':
+			return 90;
+		case 'chain-bonus-2':
+			return 85;
+		case 'vent+5':
+			return 80;
+		case 'cap+10':
+			return 75;
+		case 'delivery+1':
+			return 70;
+		case 'count-1':
+			return 65;
+		case 'hand+1':
+			return 60;
+		case 'draw+1':
+			return 60;
+		case 'neutron':
+			return 55;
+		case 'add-he-2':
+			return 50;
+		case 'meltdown-save':
+			return 45;
+		case 'sector-shield':
+			return 40;
+		case 'duplicate-card':
+			return 30;
+		case 'draft+1':
+			return 30;
+		case 'reroll':
+			return 15;
+		default:
+			return 0;
+	}
+}
+
+function draftScore(option: DraftOption, run: RunState, ancestry: Ancestry): number {
+	if (option.kind === 'cards') {
+		const distance = ancestry.distance.get(option.element);
+		const relevance = distance === undefined ? 0 : Math.max(0, 30 - distance * 5);
+		return 35 + tierOf(option.element) * 2 + relevance;
+	}
+	const effect =
+		option.kind === 'module'
+			? MODULE_BY_ID.get(option.moduleId)?.effect
+			: PATCH_BY_ID.get(option.patchId)?.effect;
+	return 45 + moduleScore(effect ?? '', run);
+}
+
+function hasEmptyCell(run: RunState): boolean {
+	return run.grid.some((tile) => tile === null);
+}
+
+function step(
+	run: RunState,
+	unlocked: readonly string[],
+	policy: 'casual' | 'competent',
+	desperate: boolean
+): RunState {
+	const target = activeContract(run).target;
+	const targetCells = run.grid.flatMap((tile, cell) => (tile === target ? [cell] : []));
+	if (targetCells.length > 0) return deliver(run, targetCells[0], unlocked);
+
+	if (desperate) {
+		const decision = desperateDecision(run, target);
+		const placed = applyDecision(run, decision);
+		if (placed) return placed;
+		if (run.hand.length > 0) return vent(run, 0);
+		return endTurn(run);
+	}
+
+	if (policy === 'casual' && run.pressure > run.pressureCap * 0.7 && run.hand.length > 0) {
+		return vent(run, 0);
+	}
+
+	const decision =
+		policy === 'casual' ? casualDecision(run, target) : competentDecision(run, target);
+
+	const applied = applyDecision(run, decision);
+	if (applied) return applied;
+
+	if (!hasEmptyCell(run) && run.scrapsUsed < 1) {
+		const ancestry = ancestryFor(target, run.hasCatalyst);
+		const cell = pickScrapCell(run, ancestry);
+		if (cell >= 0) {
+			const next = scrap(run, cell);
+			if (next !== run) return next;
+		}
+	}
+
+	if (run.hand.length > 0 && run.pressure > run.sectorFloor) {
+		const ancestry = ancestryFor(target, run.hasCatalyst);
+		return vent(run, policy === 'casual' ? 0 : pickVentIndex(run, ancestry));
+	}
+
+	return endTurn(run);
+}
+
+function applyDecision(run: RunState, decision: Decision): RunState | null {
+	if (decision.kind === 'place' && decision.placement) {
+		const { hand, cell, choices } = decision.placement;
+		const next = placeCard(run, hand, cell, ELEMENTS, RECIPES, choices);
+		return next !== run ? next : null;
+	}
+
+	if (decision.kind === 'scrap' && decision.cell !== undefined) {
+		const next = scrap(run, decision.cell);
+		return next !== run ? next : null;
+	}
+
+	if (decision.kind === 'vent' && decision.handIndex !== undefined) {
+		const next = vent(run, decision.handIndex);
+		return next !== run ? next : null;
+	}
+
+	return null;
+}
+
+function play(seed: number, unlocked: readonly string[], policy: 'casual' | 'competent'): Result {
 	let run = createRun(seed);
 	let peak = 0;
 	let actions = 0;
+	let idle = 0;
+	let marker = `${run.contractsCompleted}:${run.delivered}:${run.sector}`;
 
-	while (run.status === 'active' && actions < 4000) {
+	while (run.status === 'active' && actions < ACTION_CAP) {
 		actions += 1;
 		peak = Math.max(peak, run.pressure);
 
+		const nextMarker = `${run.contractsCompleted}:${run.delivered}:${run.sector}`;
+		if (nextMarker !== marker) {
+			marker = nextMarker;
+			idle = 0;
+		} else {
+			idle += 1;
+		}
+		const desperate = idle > DESPERATE_AFTER;
+
 		if (run.pendingDraft) {
-			run = chooseDraft(run, 0);
+			run = chooseDraft(run, draftChoice(run, policy));
 			continue;
 		}
 		if (run.pendingTransition) {
@@ -40,61 +624,9 @@ function play(seed: number, unlocked: readonly string[]): Result {
 			continue;
 		}
 
-		const contract = activeContract(run);
-		const targetCells = run.grid
-			.map((tile, index) => (tile === contract.target ? index : -1))
-			.filter((index) => index >= 0);
-
-		if (targetCells.length > 0) {
-			run = deliver(run, targetCells[0], unlocked);
-			continue;
-		}
-
-		if (run.pressure > run.pressureCap * 0.7 && run.hand.length > 0) {
-			run = vent(run, 0);
-			continue;
-		}
-
-		let best: { hand: number; cell: number; gain: number } | null = null;
-		let safe: { hand: number; cell: number; gain: number } | null = null;
-		for (let hand = 0; hand < run.hand.length; hand += 1) {
-			for (let cell = 0; cell < 25; cell += 1) {
-				const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
-				if (!preview || preview.meltdown) continue;
-
-				const candidate = { hand, cell, gain: preview.pressureGain };
-				if (preview.steps.length > 0) {
-					if (!best || candidate.gain < best.gain) best = candidate;
-				} else if (!safe || candidate.gain < safe.gain) {
-					safe = candidate;
-				}
-			}
-		}
-
-		const choice = best ?? safe;
-		if (choice && run.pressure + choice.gain <= run.pressureCap) {
-			run = placeCard(run, choice.hand, choice.cell, ELEMENTS, RECIPES);
-			continue;
-		}
-		if (run.hand.length > 0) {
-			run = vent(run, 0);
-			continue;
-		}
-
-		if (run.grid.every((tile) => tile !== null)) {
-			const cell = run.grid.findIndex((tile) => tile !== contract.target);
-			if (cell >= 0 && run.scrapsUsed < 1) {
-				run = scrap(run, cell);
-				continue;
-			}
-		}
-
-		const empty = run.grid.findIndex((tile) => tile === null);
-		if (empty >= 0 && run.hand.length > 0) {
-			run = placeCard(run, 0, empty, ELEMENTS, RECIPES);
-			continue;
-		}
-		run = endTurn(run);
+		const before = run;
+		run = step(run, unlocked, policy, desperate);
+		if (run === before) run = endTurn(run);
 	}
 
 	return {
@@ -104,34 +636,61 @@ function play(seed: number, unlocked: readonly string[]): Result {
 		peak,
 		pressure: run.pressure,
 		sector: run.sector,
-		actions
+		actions,
+		stalled: run.status === 'active'
 	};
 }
 
-function report(label: string, results: Result[]): void {
+export function casualPlay(seed: number, unlocked: readonly string[]): Result {
+	return play(seed, unlocked, 'casual');
+}
+
+export function competentPlay(seed: number, unlocked: readonly string[]): Result {
+	return play(seed, unlocked, 'competent');
+}
+
+function report(label: string, target: string, results: Result[]): void {
 	const wins = results.filter((result) => result.status === 'victory').length;
 	const meltdowns = results.filter((result) => result.status === 'meltdown').length;
+	const stalls = results.filter((result) => result.stalled).length;
 	const rate = (wins / results.length) * 100;
 	const average = (values: number[]) =>
 		values.reduce((sum, value) => sum + value, 0) / values.length;
 
-	console.log(`\n${label}`);
+	console.log(`\n${label} (target ${target})`);
 	console.log(
-		`  runs ${results.length} · wins ${wins} (${rate.toFixed(0)}%) · meltdowns ${meltdowns}`
+		`  runs ${results.length} · wins ${wins} (${rate.toFixed(0)}%) · meltdowns ${meltdowns} · stalls ${stalls}`
 	);
 	console.log(
 		`  avg contracts ${average(results.map((result) => result.contracts)).toFixed(1)} · avg peak pressure ${average(
 			results.map((result) => result.peak)
-		).toFixed(0)} · avg sector ${average(results.map((result) => result.sector)).toFixed(1)}`
+		).toFixed(
+			0
+		)} · avg sector ${average(results.map((result) => result.sector)).toFixed(1)} · avg actions ${average(
+			results.map((result) => result.actions)
+		).toFixed(0)}`
 	);
 }
 
-const seeds = Array.from({ length: 40 }, (_, index) => index + 1);
+const seeds = Array.from({ length: SEED_COUNT }, (_, index) => index + 1);
+
 report(
-	'No unlocks (target 10–20% wins)',
-	seeds.map((seed) => play(seed, []))
+	'Casual · no unlocks',
+	'acceptance 10–20% wins',
+	seeds.map((seed) => casualPlay(seed, []))
 );
 report(
-	'All unlocks (target 30–50% wins)',
-	seeds.map((seed) => play(seed, ALL_UNLOCKS))
+	'Casual · all unlocks',
+	'reference only',
+	seeds.map((seed) => casualPlay(seed, ALL_UNLOCKS))
+);
+report(
+	'Competent · no unlocks',
+	'reference only',
+	seeds.map((seed) => competentPlay(seed, []))
+);
+report(
+	'Competent · all unlocks',
+	'acceptance 30–50% wins',
+	seeds.map((seed) => competentPlay(seed, ALL_UNLOCKS))
 );

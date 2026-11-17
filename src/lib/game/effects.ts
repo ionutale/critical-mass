@@ -2,6 +2,7 @@ import { contractById, contractsForSlot } from '../data/contracts';
 import { MODULE_BY_ID } from '../data/modules';
 import { PATCH_BY_ID } from '../data/patches';
 import type { ModuleEffect, RunState } from '../types';
+import { pickIndex } from './rng';
 
 export function effectCount(run: RunState, effect: ModuleEffect): number {
 	let count = 0;
@@ -81,10 +82,16 @@ export function applyEffect(run: RunState, effect: ModuleEffect): RunState {
 		}
 		case 'reroll': {
 			const contract = contractById(run.contractId);
-			const other = contractsForSlot(contract.sector, contract.slot).find(
+			const others = contractsForSlot(contract.sector, contract.slot).filter(
 				(variant) => variant.id !== contract.id
 			);
-			return other ? { ...run, contractId: other.id } : run;
+			if (others.length === 0) return run;
+			const picked = pickIndex(run.rngState, others.length);
+			return {
+				...run,
+				contractId: others[picked.index].id,
+				rngState: picked.state
+			};
 		}
 		default:
 			return run;

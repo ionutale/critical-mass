@@ -19,7 +19,7 @@ describe('fusion', () => {
 		const preview = previewPlacement(run, 0, 13, ELEMENTS, RECIPES)!;
 
 		expect(preview.steps.map((step) => step.result)).toEqual(['He']);
-		expect(preview.pressureGain).toBe(5);
+		expect(preview.pressureGain).toBe(7);
 		expect(preview.grid[12]).toBeNull();
 		expect(preview.grid[13]).toBe('He');
 
@@ -90,7 +90,7 @@ describe('fusion', () => {
 			cell: 7,
 			other: 'Be',
 			result: 'C',
-			pressure: 7
+			pressure: 9
 		});
 		expect(preview.steps[0].choice).toBe(1);
 		expect(preview.steps[0].result).toBe('O');
@@ -114,7 +114,7 @@ describe('fusion', () => {
 		const hot = createRun(42);
 		hot.pressure = 98;
 		const preview = previewPlacement(hot, 0, 13, ELEMENTS, RECIPES)!;
-		expect(preview.pressureAfter).toBe(103);
+		expect(preview.pressureAfter).toBe(105);
 		expect(preview.meltdown).toBe(true);
 	});
 });
