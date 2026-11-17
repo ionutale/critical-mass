@@ -66,6 +66,99 @@
 	}
 }
 
+/* --- Ambient motion: reactor breathing, scan sweep, background drift --- */
+
+/* Slow glow on the reactor frame. Keyframes override the scoped static
+   box-shadow in RunScreen while animating; no geometry changes. */
+.reactor {
+	position: relative;
+	overflow: hidden;
+	animation: reactor-breathe 5s ease-in-out infinite;
+}
+
+/* Scanning sweep across the grid. Absolutely positioned so it is not a grid
+   item; the parent clips it. Base transform parks it offscreen when paused. */
+.reactor::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+	border-radius: inherit;
+	background: linear-gradient(90deg, transparent 40%, rgba(56, 225, 255, 0.1) 50%, transparent 60%);
+	transform: translateX(-100%);
+	animation: scan-sweep 6s linear infinite;
+}
+
+/* Faint drifting haze behind all app content. */
+.app-root {
+	position: relative;
+	isolation: isolate;
+}
+
+.app-root::before {
+	content: '';
+	position: fixed;
+	inset: -20%;
+	z-index: -1;
+	pointer-events: none;
+	background:
+		radial-gradient(55% 45% at 30% 25%, rgba(56, 225, 255, 0.07), transparent 70%),
+		radial-gradient(50% 40% at 75% 70%, rgba(255, 79, 216, 0.05), transparent 70%);
+	animation: bg-drift 24s ease-in-out infinite;
+}
+
+@keyframes reactor-breathe {
+	0%,
+	100% {
+		box-shadow:
+			inset 0 0 26px rgba(56, 225, 255, 0.05),
+			0 0 0 rgba(56, 225, 255, 0);
+	}
+	50% {
+		box-shadow:
+			inset 0 0 30px rgba(56, 225, 255, 0.11),
+			0 0 18px rgba(56, 225, 255, 0.14);
+	}
+}
+
+@keyframes scan-sweep {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(100%);
+	}
+}
+
+@keyframes bg-drift {
+	0%,
+	100% {
+		transform: translate3d(-1.5%, -1%, 0) scale(1);
+		opacity: 0.55;
+	}
+	50% {
+		transform: translate3d(1.5%, 1%, 0) scale(1.06);
+		opacity: 0.9;
+	}
+}
+
+.reduce-motion .reactor,
+.reduce-motion .reactor::after,
+.reduce-motion.app-root::before {
+	animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.reactor,
+	.reactor::after,
+	.app-root::before {
+		animation: none !important;
+	}
+}
+
+/* --- Shared reduced-motion overrides --- */
+
 .reduce-motion .gauge .fill,
 .reduce-motion .cell.filled,
 .reduce-motion .cell.target,
