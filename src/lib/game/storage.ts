@@ -1,4 +1,4 @@
-import type { SaveState } from '../types';
+import type { RunState, SaveState } from '../types';
 import { createRun } from './turn';
 
 export const SAVE_KEY = 'critical-mass:save:v1';
@@ -31,6 +31,12 @@ export function createInitialSave(seed = 42): SaveState {
 	};
 }
 
+const DEFAULT_SEED = 42;
+
+function parseSeed(value: unknown): number | null {
+	return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 export function parseSave(raw: string): SaveState | null {
 	let parsed: unknown;
 	try {
@@ -46,10 +52,14 @@ export function parseSave(raw: string): SaveState | null {
 	if (!save.settings || typeof save.settings.sound !== 'boolean') return null;
 
 	const base = createInitialSave();
-	const run =
-		save.run && typeof save.run === 'object'
-			? { ...createRun(save.run.seed ?? 42), ...save.run }
-			: null;
+	let run: SaveState['run'] = null;
+	if (save.run && typeof save.run === 'object') {
+		const storedRun = save.run as Partial<RunState>;
+		const seed = 'seed' in storedRun ? parseSeed(storedRun.seed) : DEFAULT_SEED;
+		// A present-but-unusable seed means the save cannot be trusted; let loadSave recover.
+		if (seed === null) return null;
+		run = { ...createRun(seed), ...storedRun, seed } as RunState;
+	}
 
 	return {
 		...base,

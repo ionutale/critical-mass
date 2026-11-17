@@ -8,8 +8,14 @@ export const START_VARIANTS: readonly { cell: number; deck: readonly string[] }[
 	{ cell: 13, deck: [...Array<string>(6).fill('H'), 'He', 'He', 'He', 'He'] }
 ];
 
+function variantIndex(seed: number): number {
+	const count = START_VARIANTS.length;
+	if (!Number.isFinite(seed)) return 0;
+	return ((Math.trunc(seed) % count) + count) % count;
+}
+
 export function createRun(seed: number): RunState {
-	const variant = START_VARIANTS[seed % START_VARIANTS.length];
+	const variant = START_VARIANTS[variantIndex(seed)];
 	const grid: (string | null)[] = Array<string | null>(25).fill(null);
 	grid[variant.cell] = 'H';
 

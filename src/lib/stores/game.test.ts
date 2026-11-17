@@ -7,6 +7,7 @@ import {
 	initGame,
 	newRun,
 	place,
+	recovered,
 	resetAll,
 	resetRun,
 	run,
@@ -160,6 +161,47 @@ describe('game store', () => {
 	it('recovers from a corrupt save', () => {
 		window.localStorage.setItem(SAVE_KEY, '{bad');
 		initGame();
+		expect(get(run)!.grid[12]).toBe('H');
+	});
+
+	it('loads a save with a negative run seed without crashing', () => {
+		const state = JSON.parse(JSON.stringify(get(save)));
+		state.run.seed = -1;
+		window.localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+		initGame();
+
+		expect(get(recovered)).toBe(false);
+		expect(get(run)!.seed).toBe(-1);
+		expect(get(run)!.grid.filter(Boolean)).toHaveLength(1);
+		expect(get(run)!.hand.length + get(run)!.deck.length).toBe(10);
+	});
+
+	it('recovers from a save with a non-numeric run seed', () => {
+		const state = JSON.parse(JSON.stringify(get(save)));
+		state.run.seed = 'not-a-seed';
+		window.localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+		initGame();
+
+		expect(get(recovered)).toBe(true);
+		expect(get(run)!.grid[12]).toBe('H');
+	});
+
+	it('recovers from a save with a null run seed (NaN/Infinity after JSON)', () => {
+		const state = JSON.parse(JSON.stringify(get(save)));
+		state.run.seed = Number.NaN;
+		window.localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+		initGame();
+
+		expect(get(recovered)).toBe(true);
+		expect(get(run)!.grid[12]).toBe('H');
+	});
+
+	it('recovers from a save with an infinite run seed', () => {
+		const raw = JSON.stringify(get(save)).replace('"seed":42', '"seed":1e999');
+		window.localStorage.setItem(SAVE_KEY, raw);
+		initGame();
+
+		expect(get(recovered)).toBe(true);
 		expect(get(run)!.grid[12]).toBe('H');
 	});
 });

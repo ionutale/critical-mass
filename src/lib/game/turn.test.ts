@@ -35,6 +35,24 @@ describe('turn', () => {
 		);
 	});
 
+	it('normalizes negative seeds to a valid variant', () => {
+		const run = createRun(-1);
+		// -1 normalizes to the last variant for a three-entry table.
+		const variant = START_VARIANTS[START_VARIANTS.length - 1];
+
+		expect(run.grid[variant.cell]).toBe('H');
+		expect(run.grid.filter(Boolean)).toHaveLength(1);
+		expect(run.hand.length + run.deck.length).toBe(10);
+		expect(run.seed).toBe(-1);
+	});
+
+	it('falls back to the first variant for a non-finite seed', () => {
+		const run = createRun(Number.NaN);
+
+		expect(run.grid[START_VARIANTS[0].cell]).toBe('H');
+		expect(run.hand.length + run.deck.length).toBe(10);
+	});
+
 	it('gives every variant a reachable sector-1 slot-1 first contract', () => {
 		const firstSlot = contractsForSlot(1, 1);
 
