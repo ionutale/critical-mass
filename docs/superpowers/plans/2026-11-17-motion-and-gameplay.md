@@ -33,10 +33,12 @@
 ### Task 1: Branch-aware fusion engine
 
 **Files:**
+
 - Modify: `src/lib/game/fusion.ts`
 - Test: `src/lib/game/fusion.test.ts`
 
 **Interfaces:**
+
 - Consumes: existing `RunState`, `ElementRecord`, `RecipeRecord`, `neighbors`, `findRecipe`.
 - Produces: `FusionOption`, extended `FusionStep`, `previewPlacement(run, handIndex, cell, elements, recipes, choices?: readonly number[])`, `placeCard(run, handIndex, cell, elements, recipes, choices?: readonly number[])`.
 
@@ -46,25 +48,25 @@
 // Build a run whose placed tile has >=2 fusable neighbors with different results.
 // e.g. active He at cell 12 with Be at 7 (N) and C at 13 (E): Be+He->C, C+He->O.
 it('lists all candidate neighbors per step', () => {
-  const preview = previewPlacement(run, 0, 12, ELEMENTS, RECIPES)!;
-  expect(preview.steps[0].options.length).toBeGreaterThanOrEqual(2);
+	const preview = previewPlacement(run, 0, 12, ELEMENTS, RECIPES)!;
+	expect(preview.steps[0].options.length).toBeGreaterThanOrEqual(2);
 });
 it('uses the chosen option index', () => {
-  const a = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [0])!;
-  const b = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [1])!;
-  expect(a.steps[0].result).not.toBe(b.steps[0].result);
+	const a = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [0])!;
+	const b = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [1])!;
+	expect(a.steps[0].result).not.toBe(b.steps[0].result);
 });
 it('falls back to first option for out-of-range choice', () => {
-  const a = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [99])!;
-  const b = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [])!;
-  expect(a.grid).toEqual(b.grid);
+	const a = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [99])!;
+	const b = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, [])!;
+	expect(a.grid).toEqual(b.grid);
 });
 it('commit equals preview with non-default choices', () => {
-  const choices = [1];
-  const preview = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, choices)!;
-  const next = placeCard(run, 0, 12, ELEMENTS, RECIPES, choices);
-  expect(next.grid).toEqual(preview.grid);
-  expect(next.pressure).toBe(preview.pressureAfter);
+	const choices = [1];
+	const preview = previewPlacement(run, 0, 12, ELEMENTS, RECIPES, choices)!;
+	const next = placeCard(run, 0, 12, ELEMENTS, RECIPES, choices);
+	expect(next.grid).toEqual(preview.grid);
+	expect(next.pressure).toBe(preview.pressureAfter);
 });
 ```
 
@@ -81,12 +83,14 @@ it('commit equals preview with non-default choices', () => {
 ### Task 2: Branch selection in the run screen and preview
 
 **Files:**
+
 - Modify: `src/lib/stores/game.ts` (`place`)
 - Modify: `src/lib/components/RunScreen.svelte`
 - Modify: `src/lib/components/PreviewOverlay.svelte`
 - Test: `src/lib/components/run.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 `previewPlacement`/`placeCard` with `choices`.
 - Produces: store `place(handIndex: number, cell: number, choices?: readonly number[]): void`; `PreviewOverlay` prop `onChoose: (step: number, option: number) => void`.
 
@@ -105,6 +109,7 @@ it('commit equals preview with non-default choices', () => {
 ### Task 3: Random seed, start variants, seed readout
 
 **Files:**
+
 - Modify: `src/lib/game/storage.ts`
 - Modify: `src/lib/game/turn.ts`
 - Modify: `src/lib/stores/game.ts` (`newRun`)
@@ -112,6 +117,7 @@ it('commit equals preview with non-default choices', () => {
 - Test: `src/lib/game/turn.test.ts`, `src/lib/stores/game.test.ts`
 
 **Interfaces:**
+
 - Consumes: `createRun(seed)`.
 - Produces: `randomSeed(): number`; `START_VARIANTS` table; `createRun` selects a variant by seed.
 
@@ -130,11 +136,13 @@ it('commit equals preview with non-default choices', () => {
 ### Task 4: Content expansion and validator updates
 
 **Files:**
+
 - Modify: `src/lib/game/validate.ts`, `src/lib/game/validate.test.ts`
 - Modify: `src/lib/data/elements.ts`, `recipes.ts`, `contracts.ts`, `modules.ts`, `patches.ts`, `unlocks.ts`
 - Test: `src/lib/data/content.test.ts`
 
 **Interfaces:**
+
 - Consumes: existing data shapes (`ElementRecord`, `RecipeRecord`, `ContractTemplate`, `ModuleRecord`, `PatchRecord`, `UnlockRecord`).
 - Produces: expanded datasets; validators accept the new counts.
 
@@ -153,10 +161,12 @@ it('commit equals preview with non-default choices', () => {
 ### Task 5: Two-policy balance harness and tuning
 
 **Files:**
+
 - Modify: `scripts/balance.ts`
 - Modify (constants only): `src/lib/game/fusion.ts`, `effects.ts`, `turn.ts`, `contracts.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 `choices` API; `createRun`, `previewPlacement`, `placeCard`, `deliver`, `vent`, `scrap`, `chooseDraft`, `nextSector`.
 - Produces: `casualPlay(seed, unlocked)` and `competentPlay(seed, unlocked)` returning `Result` with `stalled: boolean`.
 
@@ -175,9 +185,11 @@ it('commit equals preview with non-default choices', () => {
 ### Task 6: Ambient motion
 
 **Files:**
+
 - Modify: `src/lib/styles/neon.css`
 
 **Interfaces:**
+
 - Consumes: `.reduce-motion` class on `.app-root` (already applied in `App.svelte`).
 - Produces: `reactor-breathe`, `scan-sweep`, `bg-drift` keyframes and classes.
 
@@ -192,9 +204,11 @@ it('commit equals preview with non-default choices', () => {
 ### Task 7: Overlay and screen transitions
 
 **Files:**
+
 - Modify: `src/lib/components/App.svelte`, `PreviewOverlay.svelte`, `DraftOverlay.svelte`, `CardPicker.svelte`, `EndScreen.svelte`, `SectorTransition.svelte`, `TitleScreen.svelte`, `ResearchLab.svelte`, `SettingsScreen.svelte`, `HowToPlay.svelte`
 
 **Interfaces:**
+
 - Consumes: `reducedMotion` store.
 - Produces: entrance/exit transitions on overlays and screen swaps.
 
@@ -209,9 +223,11 @@ it('commit equals preview with non-default choices', () => {
 ### Task 8: Card and input feel
 
 **Files:**
+
 - Modify: `src/lib/components/RunScreen.svelte` (hand cards, buttons)
 
 **Interfaces:**
+
 - Consumes: `animate:flip` from `svelte/animate`, `reducedMotion`.
 - Produces: card flip on refill/removal, hover lift, active press.
 
@@ -226,11 +242,13 @@ it('commit equals preview with non-default choices', () => {
 ### Task 9: Fusion chain playback
 
 **Files:**
+
 - Create: `src/lib/components/FusionPlayback.svelte`
 - Modify: `src/lib/components/RunScreen.svelte`, `src/lib/styles/neon.css`
 - Test: `src/lib/components/run.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 `PlacementPreview.steps` (chosen path), `reducedMotion`.
 - Produces: `FusionPlayback` props `{ steps: FusionStep[]; grid: (string|null)[]; reducedMotion: boolean; onDone: () => void }`; `merge`/`pop`/`flash` keyframes.
 
