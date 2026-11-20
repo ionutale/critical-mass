@@ -25,8 +25,9 @@ export interface Settings {
 
 /**
  * Save schema v2: one arcade run (or none), lifetime meta progression, and the
- * two player settings. v1 saves from the retiring engine are migrated by
- * discarding their run and meta while keeping the settings.
+ * two player settings. Legacy saves from the retiring engine (stamped v1, or v2
+ * by interim builds) are migrated by discarding their run and meta while
+ * keeping the settings.
  */
 export interface SaveState {
 	version: 2;
@@ -209,9 +210,40 @@ function recoveredSave(): LoadedSave {
 }
 
 /**
- * Parse a raw save. A valid v2 save is restored field for field; a v1 save is
- * migrated to a v2 save with no active run and fresh meta but the same
- * settings; anything corrupt recovers a fresh save and reports it.
+ * Detect the retiring engine's shape regardless of the version stamp. Mid-
+ * redesign builds wrote new saves with `version: 2` while still using the
+ * legacy run/meta shapes (legacy meta carries `research`; legacy runs carry
+ * `pressure`/`sector`). Those must migrate, not be mistaken for arcade v2 data
+ * and discarded as corrupt.
+ */
+function isLegacyShape(value: Record<string, unknown>): boolean {
+	if (isRecord(value.meta) && 'research' in value.meta) return true;
+	if (isRecord(value.run) && ('pressure' in value.run || 'sector' in value.run)) return true;
+	return false;
+}
+
+/**
+ * Migrate any legacy save to the current schema: the retired run cannot be
+ * resumed, so it resets to no active run, meta starts fresh, and the player's
+ * settings carry over field by field.
+ */
+function migrateLegacy(settings: Settings): LoadedSave {
+	return {
+		save: {
+			version: SAVE_VERSION,
+			run: null,
+			meta: createMeta(),
+			settings
+		},
+		recovered: false
+	};
+}
+
+/**
+ * Parse a raw save. A valid v2 save is restored field for field; a v1 save
+ * (and a version-2 save whose shape is still legacy) is migrated to a v2 save
+ * with no active run and fresh meta but the same settings; anything corrupt
+ * recovers a fresh save and reports it.
  *
  * Pending drafts need no persisted options: `generateDraft` derives them from
  * `rngState`, `upgrades`, and `unlocked`, so `pendingDrafts` alone restores the
@@ -229,16 +261,8 @@ export function parseSave(raw: string): LoadedSave {
 
 	const settings = parseSettings(parsed.settings);
 
-	if (parsed.version === 1) {
-		return {
-			save: {
-				version: SAVE_VERSION,
-				run: null,
-				meta: createMeta(),
-				settings
-			},
-			recovered: false
-		};
+	if (parsed.version === 1 || (parsed.version === SAVE_VERSION && isLegacyShape(parsed))) {
+		return migrateLegacy(settings);
 	}
 
 	if (parsed.version !== SAVE_VERSION) return recoveredSave();

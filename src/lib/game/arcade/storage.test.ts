@@ -248,6 +248,88 @@ describe('v1 migration', () => {
 	});
 });
 
+describe('v2 legacy-shape migration', () => {
+	/** The retiring engine's run/meta shapes, as interim builds wrote them. */
+	function legacyShapes() {
+		return {
+			run: {
+				seed: 99,
+				rngState: 1,
+				grid: ['H'],
+				deck: ['H'],
+				hand: ['H'],
+				discard: [],
+				pressure: 10,
+				pressureCap: 100,
+				sectorFloor: 0,
+				sector: 1,
+				contractId: 'contract-1',
+				delivered: 0,
+				contractsCompleted: 0,
+				turn: 2,
+				scrapsUsed: 0,
+				pendingDiscards: 0,
+				modules: [],
+				hasCatalyst: false,
+				ventsThisContract: 0,
+				maxChain: 1,
+				deliveredTargets: [],
+				pendingDraft: null,
+				pendingDraftKind: null,
+				pendingTransition: false,
+				patches: [],
+				researchEarned: 5,
+				contractMaxChain: 1,
+				contractReduction: 0,
+				meltdownSaves: 0,
+				sectorShield: 0,
+				status: 'active'
+			},
+			meta: {
+				research: 42,
+				unlocks: ['legacy-unlock'],
+				stats: { runs: 5, wins: 2, bestSector: 3, contracts: 8 }
+			},
+			settings: { sound: false, reduceMotion: true },
+			introSeen: true
+		};
+	}
+
+	it('migrates an interim version-2 save with legacy meta and run', () => {
+		const legacy = legacyShapes();
+
+		const loaded = loadSave(storageWith(JSON.stringify({ ...legacy, version: 2 })));
+
+		expect(loaded.recovered).toBe(false);
+		expect(loaded.save.version).toBe(2);
+		expect(loaded.save.run).toBeNull();
+		expect(loaded.save.meta).toEqual(createMeta());
+		expect(loaded.save.settings).toEqual({ sound: false, reduceMotion: true });
+	});
+
+	it('migrates a version-2 save with only legacy meta markers', () => {
+		const legacy = legacyShapes();
+
+		const loaded = parseSave(JSON.stringify({ ...legacy, version: 2, run: null }));
+
+		expect(loaded.recovered).toBe(false);
+		expect(loaded.save.run).toBeNull();
+		expect(loaded.save.meta).toEqual(createMeta());
+		expect(loaded.save.settings).toEqual({ sound: false, reduceMotion: true });
+	});
+
+	it('migrates a version-2 save with only legacy run markers', () => {
+		const legacy = legacyShapes();
+
+		const loaded = parseSave(JSON.stringify({ ...legacy, version: 2, meta: createMeta() }));
+
+		expect(loaded.recovered).toBe(false);
+		expect(loaded.save.run).toBeNull();
+		expect(loaded.save.meta).toEqual(createMeta());
+		expect(loaded.save.settings).toEqual({ sound: false, reduceMotion: true });
+	});
+});
+
 describe('recovery', () => {
 	it.each(['{oops', 'null', '[]', '42', '"save"'])(
 		'recovers from corrupt JSON %j with a fresh save',
