@@ -27,6 +27,16 @@
 - 44 px targets, focus traps, axe-clean, offline intact.
 - Commands: `pnpm validate`, `pnpm check`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:bundle`, `pnpm test:e2e`.
 
+## Execution strategy (parallel namespaces)
+
+The existing app must keep building until the switchover. New code lives in parallel namespaces; Task 12 switches `App.svelte` to it, and Task 13 deletes the legacy code. Wherever a task below says "Rewrite <old path>", create the arcade-namespaced file instead.
+
+- New engine: `src/lib/game/arcade/` (fusion, turn, draft, meta, storage, balance).
+- New data: `src/lib/data/arcade/unlocks.ts`; `src/lib/data/upgrades.ts` is new-only.
+- New store: `src/lib/stores/arcade.ts`.
+- New components: `src/lib/components/arcade/`.
+- New gesture action: `src/lib/actions/arcadeDrag.ts`.
+
 ## Review Focus
 
 - **Preview ≠ commit under branching / 8-way:** a multi-step chain with non-default choices must commit exactly the previewed grid, score, and heat.
@@ -61,8 +71,8 @@
 
 **Files:**
 
-- Rewrite: `src/lib/game/fusion.ts`
-- Test: `src/lib/game/fusion.test.ts`
+- Create: `src/lib/game/arcade/fusion.ts`
+- Test: `src/lib/game/arcade/fusion.test.ts`
 
 **Interfaces:**
 
@@ -83,9 +93,9 @@
 
 **Files:**
 
-- Rewrite: `src/lib/game/turn.ts` (creation only in this task)
-- Rewrite: `src/lib/game/rng.ts` if signatures change
-- Test: `src/lib/game/turn.test.ts`
+- Create: `src/lib/game/arcade/turn.ts` (creation only in this task)
+- Reuse: `src/lib/game/rng.ts` unchanged
+- Test: `src/lib/game/arcade/turn.test.ts`
 
 **Interfaces:**
 
@@ -105,8 +115,8 @@
 
 **Files:**
 
-- Modify: `src/lib/game/turn.ts`
-- Test: `src/lib/game/turn.test.ts`
+- Modify: `src/lib/game/arcade/turn.ts`
+- Test: `src/lib/game/arcade/turn.test.ts`
 
 **Interfaces:**
 
@@ -126,9 +136,9 @@
 **Files:**
 
 - Create: `src/lib/data/upgrades.ts`
-- Create: `src/lib/game/draft.ts`
-- Modify: `src/lib/game/fusion.ts` and `turn.ts` (effect hooks)
-- Test: `src/lib/game/draft.test.ts`
+- Create: `src/lib/game/arcade/draft.ts`
+- Modify: `src/lib/game/arcade/fusion.ts` and `turn.ts` (effect hooks)
+- Test: `src/lib/game/arcade/draft.test.ts`
 
 **Interfaces:**
 
@@ -148,9 +158,9 @@
 
 **Files:**
 
-- Rewrite: `src/lib/data/unlocks.ts`
-- Create: `src/lib/game/meta.ts`
-- Test: `src/lib/game/meta.test.ts`
+- Create: `src/lib/data/arcade/unlocks.ts`
+- Create: `src/lib/game/arcade/meta.ts`
+- Test: `src/lib/game/arcade/meta.test.ts`
 
 **Interfaces:**
 
@@ -170,8 +180,8 @@
 
 **Files:**
 
-- Modify: `src/lib/game/storage.ts`
-- Test: `src/lib/game/storage.test.ts`
+- Create: `src/lib/game/arcade/storage.ts`
+- Test: `src/lib/game/arcade/storage.test.ts`
 
 **Interfaces:**
 
@@ -190,8 +200,8 @@
 
 **Files:**
 
-- Rewrite: `src/lib/stores/game.ts`
-- Test: `src/lib/stores/game.test.ts`
+- Create: `src/lib/stores/arcade.ts`
+- Test: `src/lib/stores/arcade.test.ts`
 
 **Interfaces:**
 
@@ -210,9 +220,9 @@
 
 **Files:**
 
-- Create: `src/lib/components/Board.svelte`, `Hand.svelte`, `HeatBar.svelte`, `ScoreDisplay.svelte`, `PreviewPanel.svelte`
-- Rewrite: `src/lib/components/RunScreen.svelte`
-- Test: `src/lib/components/run.test.ts`
+- Create: `src/lib/components/arcade/Board.svelte`, `Hand.svelte`, `HeatBar.svelte`, `ScoreDisplay.svelte`, `PreviewPanel.svelte`
+- Create: `src/lib/components/arcade/RunScreen.svelte`
+- Test: `src/lib/components/arcade/run.test.ts`
 
 **Interfaces:**
 
@@ -231,9 +241,9 @@
 
 **Files:**
 
-- Create: `src/lib/actions/dragPlacement.ts` (pointer drag + ghost)
-- Modify: `RunScreen.svelte`, `Hand.svelte`, `Board.svelte`
-- Test: `src/lib/components/run.test.ts`
+- Create: `src/lib/actions/arcadeDrag.ts` (pointer drag + ghost)
+- Modify: `src/lib/components/arcade/RunScreen.svelte`, `Hand.svelte`, `Board.svelte`
+- Test: `src/lib/components/arcade/run.test.ts`
 
 **Interfaces:**
 
@@ -252,10 +262,10 @@
 
 **Files:**
 
-- Create: `src/lib/components/choreography.ts`
-- Create: `src/lib/components/ChainPlayback.svelte` (or reuse/rewrite `FusionPlayback.svelte`)
-- Modify: `RunScreen.svelte`, `neon.css`, `src/lib/stores/motion.ts`
-- Test: `src/lib/components/run.test.ts`
+- Create: `src/lib/components/arcade/choreography.ts`
+- Create: `src/lib/components/arcade/ChainPlayback.svelte`
+- Modify: `src/lib/components/arcade/RunScreen.svelte`, `neon.css`, `src/lib/stores/motion.ts`
+- Test: `src/lib/components/arcade/run.test.ts`
 
 **Interfaces:**
 
@@ -274,9 +284,9 @@
 
 **Files:**
 
-- Rewrite: `DraftOverlay.svelte`, `EndScreen.svelte`, `TitleScreen.svelte`, `HowToPlay.svelte`, `App.svelte`
-- Create: `UnlocksScreen.svelte`; remove `ResearchLab.svelte` references
-- Test: `src/lib/components/meta.test.ts` (component cases)
+- Create: `src/lib/components/arcade/DraftOverlay.svelte`, `EndScreen.svelte`, `TitleScreen.svelte`, `HowToPlay.svelte`, `UnlocksScreen.svelte`
+- Modify: `src/lib/components/App.svelte` (switch to the arcade store/components)
+- Test: `src/lib/components/arcade/meta.test.ts` (component cases)
 
 **Interfaces:**
 
@@ -310,8 +320,8 @@
 
 **Files:**
 
-- Rewrite: `scripts/balance.ts` (or `src/lib/game/balance.ts` + thin script)
-- Create: `src/lib/game/balance.test.ts`
+- Create: `src/lib/game/arcade/balance.ts` + thin `scripts/balance.ts` caller
+- Create: `src/lib/game/arcade/balance.test.ts`
 - Modify: `package.json` scripts if needed
 
 **Interfaces:**
