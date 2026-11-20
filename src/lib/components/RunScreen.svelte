@@ -2,7 +2,7 @@
 	import { flip } from 'svelte/animate';
 	import { fly } from 'svelte/transition';
 	import { contractById } from '../data/contracts';
-	import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../data/elements';
+	import { LEGACY_ELEMENT_BY_SYMBOL, LEGACY_ELEMENTS } from '../data/elements.legacy';
 	import { MODULE_BY_ID } from '../data/modules';
 	import { PATCH_BY_ID } from '../data/patches';
 	import { RECIPES } from '../data/recipes';
@@ -75,7 +75,7 @@
 
 	const contract = $derived($run ? contractById($run.contractId) : null);
 	const targetName = $derived(
-		contract ? (ELEMENT_BY_SYMBOL.get(contract.target)?.name ?? contract.target) : ''
+		contract ? (LEGACY_ELEMENT_BY_SYMBOL.get(contract.target)?.name ?? contract.target) : ''
 	);
 	const count = $derived($run ? contractCount($run) : 0);
 	const deliverCell = $derived(
@@ -145,7 +145,7 @@
 		}
 		if (selected === null || !$run) return;
 		choices = [];
-		const result = previewPlacement($run, selected, cell, ELEMENTS, RECIPES, choices);
+		const result = previewPlacement($run, selected, cell, LEGACY_ELEMENTS, RECIPES, choices);
 		if (!result) return;
 		preview = result;
 		targetCell = cell;
@@ -157,7 +157,7 @@
 		while (next.length < preview.steps.length) next.push(0);
 		next[step] = option;
 		choices = next;
-		preview = previewPlacement($run, selected, targetCell, ELEMENTS, RECIPES, choices);
+		preview = previewPlacement($run, selected, targetCell, LEGACY_ELEMENTS, RECIPES, choices);
 	}
 
 	$effect(() => {
@@ -268,7 +268,7 @@
 				>
 					{#if tile}
 						<span class="symbol">{tile}</span>
-						<span class="name">{ELEMENT_BY_SYMBOL.get(tile)?.name ?? ''}</span>
+						<span class="name">{LEGACY_ELEMENT_BY_SYMBOL.get(tile)?.name ?? ''}</span>
 					{:else}
 						<span class="void">·</span>
 					{/if}
@@ -328,7 +328,7 @@
 						class="card"
 						class:selected={selected === index}
 						aria-pressed={selected === index}
-						aria-label={`${entry.card} ${ELEMENT_BY_SYMBOL.get(entry.card)?.name ?? entry.card} card ${index + 1}`}
+						aria-label={`${entry.card} ${LEGACY_ELEMENT_BY_SYMBOL.get(entry.card)?.name ?? entry.card} card ${index + 1}`}
 						disabled={locked}
 						animate:flip={{ duration: transitionDuration($reducedMotion, 200) }}
 						onclick={() => {
@@ -337,7 +337,9 @@
 						}}
 					>
 						<span class="card-symbol">{entry.card}</span>
-						<span class="card-name">{ELEMENT_BY_SYMBOL.get(entry.card)?.name ?? entry.card}</span>
+						<span class="card-name"
+							>{LEGACY_ELEMENT_BY_SYMBOL.get(entry.card)?.name ?? entry.card}</span
+						>
 					</button>
 				{/each}
 			</div>

@@ -47,7 +47,7 @@ function runFixture(overrides: Record<string, unknown> = {}) {
 
 function saveFixture(overrides: Record<string, unknown> = {}): SaveState {
 	return {
-		version: 1,
+		version: 2,
 		run: runFixture(),
 		meta: {
 			research: 0,

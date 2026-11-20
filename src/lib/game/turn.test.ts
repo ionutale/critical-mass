@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { contractsForSlot } from '../data/contracts';
-import { ELEMENTS } from '../data/elements';
+import { LEGACY_ELEMENTS } from '../data/elements.legacy';
 import { RECIPES } from '../data/recipes';
 import { emptyGrid, runFixture } from '../test/fixtures';
 import { placeCard } from './fusion';
@@ -80,7 +80,7 @@ describe('turn', () => {
 
 	it('discards a placed card and draws back to five', () => {
 		const run = createRun(42);
-		const after = placeCard(run, 0, 13, ELEMENTS, RECIPES);
+		const after = placeCard(run, 0, 13, LEGACY_ELEMENTS, RECIPES);
 		expect(after.discard).toContain(run.hand[0]);
 		expect(after.hand).toHaveLength(5);
 	});

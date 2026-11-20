@@ -1,4 +1,4 @@
-import type { ElementRecord, RecipeRecord, RunState } from '../types';
+import type { LegacyElementRecord, RecipeRecord, RunState } from '../types';
 import { chainReduction, fusionScale, heavyReduction } from './effects';
 import { endTurn } from './turn';
 
@@ -60,7 +60,7 @@ export function previewPlacement(
 	run: RunState,
 	handIndex: number,
 	cell: number,
-	elements: readonly ElementRecord[],
+	elements: readonly LegacyElementRecord[],
 	recipes: readonly RecipeRecord[],
 	choices: readonly number[] = []
 ): PlacementPreview | null {
@@ -143,7 +143,7 @@ export function placeCard(
 	run: RunState,
 	handIndex: number,
 	cell: number,
-	elements: readonly ElementRecord[],
+	elements: readonly LegacyElementRecord[],
 	recipes: readonly RecipeRecord[],
 	choices: readonly number[] = []
 ): RunState {

@@ -1,5 +1,5 @@
 import { contractById, contractsForSlot } from '../data/contracts';
-import { ELEMENTS } from '../data/elements';
+import { LEGACY_ELEMENTS } from '../data/elements.legacy';
 import { MODULES } from '../data/modules';
 import { PATCHES } from '../data/patches';
 import { LOCKED_MODULE_IDS, UNLOCKS } from '../data/unlocks';
@@ -53,7 +53,7 @@ const BASE_CARD_SYMBOLS = ['H', 'He', 'Be'];
 
 function cardElementPool(sector: 1 | 2 | 3, unlocked: readonly string[]): string[] {
 	if (sector !== 1) {
-		return ELEMENTS.filter((element) => !element.heavy && element.tier <= 14).map(
+		return LEGACY_ELEMENTS.filter((element) => !element.heavy && element.tier <= 14).map(
 			(element) => element.symbol
 		);
 	}

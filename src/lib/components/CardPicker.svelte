@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
-	import { ELEMENT_BY_SYMBOL } from '../data/elements';
+	import { LEGACY_ELEMENT_BY_SYMBOL } from '../data/elements.legacy';
 	import { reducedMotion, transitionDuration } from '../stores/motion';
 
 	let {
@@ -36,11 +36,11 @@
 			{#each cards as card, index (index)}
 				<button
 					type="button"
-					aria-label={`${card} ${ELEMENT_BY_SYMBOL.get(card)?.name ?? card}, discard ${index + 1}`}
+					aria-label={`${card} ${LEGACY_ELEMENT_BY_SYMBOL.get(card)?.name ?? card}, discard ${index + 1}`}
 					onclick={() => onPick(index)}
 				>
 					<span class="symbol">{card}</span>
-					<span class="name">{ELEMENT_BY_SYMBOL.get(card)?.name ?? card}</span>
+					<span class="name">{LEGACY_ELEMENT_BY_SYMBOL.get(card)?.name ?? card}</span>
 				</button>
 			{/each}
 		</div>

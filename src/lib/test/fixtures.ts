@@ -50,7 +50,7 @@ export function runFixture(overrides: Partial<RunState> = {}): RunState {
 
 export function saveFixture(overrides: Partial<SaveState> = {}): SaveState {
 	return {
-		version: 1,
+		version: 2,
 		run: runFixture(),
 		meta: metaFixture(),
 		settings: { sound: true, reduceMotion: false },

@@ -1,5 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
-import { ELEMENTS } from '../data/elements';
+import { LEGACY_ELEMENTS } from '../data/elements.legacy';
 import { RECIPES } from '../data/recipes';
 import { UNLOCKS } from '../data/unlocks';
 import type { RunState, SaveState } from '../types';
@@ -70,7 +70,7 @@ function commit(nextRun: RunState): void {
 export function place(handIndex: number, cell: number, choices: readonly number[] = []): void {
 	const current = get(run);
 	if (!current) return;
-	commit(placeCard(current, handIndex, cell, ELEMENTS, RECIPES, choices));
+	commit(placeCard(current, handIndex, cell, LEGACY_ELEMENTS, RECIPES, choices));
 }
 
 export function vent(handIndex: number): void {

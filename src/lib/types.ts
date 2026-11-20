@@ -1,10 +1,37 @@
+/** Element valence: 1–4; governs whether and how an Element fuses. */
+export type Valence = 1 | 2 | 3 | 4;
+
+/** Element mass tier: 1–3; sets a result's Rarity and score. */
+export type Mass = 1 | 2 | 3;
+
+/** The 12 real light elements used by the valence table. */
+export type ElementSymbol =
+	'H' | 'Li' | 'Na' | 'He' | 'Be' | 'Mg' | 'C' | 'N' | 'O' | 'Ne' | 'Si' | 'Fe';
+
 export interface ElementRecord {
+	symbol: ElementSymbol;
+	name: string;
+	valence: Valence;
+	mass: Mass;
+}
+
+/**
+ * @deprecated Interim shape for the retiring roguelike engine (recipes, contracts,
+ * validation). Kept only so the old game keeps compiling until Tasks 2–4 and 13
+ * replace it. Do not use in new code.
+ */
+export interface LegacyElementRecord {
 	symbol: string;
 	name: string;
 	number: number;
 	tier: number;
 	heavy: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Retiring roguelike types (contracts, sectors, modules, patches). Kept until
+// the engine and UI are replaced; see the mechanics redesign plan, Task 13.
+// ---------------------------------------------------------------------------
 
 export interface RecipeRecord {
 	a: string;
@@ -113,10 +140,20 @@ export interface MetaState {
 	stats: { runs: number; wins: number; bestSector: number; contracts: number };
 }
 
+export interface Settings {
+	sound: boolean;
+	reduceMotion: boolean;
+}
+
+/**
+ * Save schema v2. Task 7 performs the v1 → v2 migration: existing runs reset,
+ * settings and meta unlocks persist. `run` still uses the retiring run shape
+ * until Task 3/7 replace it.
+ */
 export interface SaveState {
-	version: 1;
+	version: 2;
 	run: RunState | null;
 	meta: MetaState;
-	settings: { sound: boolean; reduceMotion: boolean };
+	settings: Settings;
 	introSeen: boolean;
 }

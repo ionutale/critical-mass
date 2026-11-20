@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
-	import { ELEMENT_BY_SYMBOL } from '../data/elements';
+	import { LEGACY_ELEMENT_BY_SYMBOL } from '../data/elements.legacy';
 	import { MODULE_BY_ID } from '../data/modules';
 	import { PATCH_BY_ID } from '../data/patches';
 	import { reducedMotion, transitionDuration } from '../stores/motion';
@@ -19,7 +19,7 @@
 
 	function title(option: DraftOption): string {
 		if (option.kind === 'cards') {
-			return `${ELEMENT_BY_SYMBOL.get(option.element)?.name ?? option.element} × 2`;
+			return `${LEGACY_ELEMENT_BY_SYMBOL.get(option.element)?.name ?? option.element} × 2`;
 		}
 		if (option.kind === 'module') {
 			return MODULE_BY_ID.get(option.moduleId)?.name ?? option.moduleId;

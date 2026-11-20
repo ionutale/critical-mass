@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { ELEMENT_BY_SYMBOL } from '../data/elements';
+	import { LEGACY_ELEMENT_BY_SYMBOL } from '../data/elements.legacy';
 	import type { FusionStep } from '../game/fusion';
 
 	let {
@@ -66,7 +66,7 @@
 				style:animation-delay={`${ghost.delay}ms`}
 			>
 				<span class="symbol">
-					{ELEMENT_BY_SYMBOL.get(ghost.symbol)?.symbol ?? ghost.symbol}
+					{LEGACY_ELEMENT_BY_SYMBOL.get(ghost.symbol)?.symbol ?? ghost.symbol}
 				</span>
 			</div>
 		{/each}

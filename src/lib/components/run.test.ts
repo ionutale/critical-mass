@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import RunScreen from './RunScreen.svelte';
-import { ELEMENTS } from '../data/elements';
+import { LEGACY_ELEMENTS } from '../data/elements.legacy';
 import { RECIPES } from '../data/recipes';
 import { previewPlacement } from '../game/fusion';
 import { initGame } from '../stores/game';
@@ -84,7 +84,7 @@ describe('run screen', () => {
 		expect(preview).toHaveTextContent('+35');
 		expect(within(preview).getAllByRole('group')).toHaveLength(2);
 
-		const expected = previewPlacement(fixture, 0, 12, ELEMENTS, RECIPES, [1])!;
+		const expected = previewPlacement(fixture, 0, 12, LEGACY_ELEMENTS, RECIPES, [1])!;
 		await fireEvent.click(within(preview).getByRole('button', { name: /confirm/i }));
 
 		expect(screen.queryByRole('dialog', { name: /preview/i })).not.toBeInTheDocument();
@@ -104,7 +104,7 @@ describe('run screen', () => {
 		initGame({ run: fixture });
 		render(RunScreen);
 
-		const expected = previewPlacement(fixture, 0, 12, ELEMENTS, RECIPES, [1])!;
+		const expected = previewPlacement(fixture, 0, 12, LEGACY_ELEMENTS, RECIPES, [1])!;
 		expect(expected.steps.length).toBeGreaterThan(1);
 
 		await fireEvent.click(screen.getByRole('button', { name: /helium card 1/i }));

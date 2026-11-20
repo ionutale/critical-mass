@@ -1,4 +1,4 @@
-import { ELEMENT_BY_SYMBOL, ELEMENTS } from '../src/lib/data/elements';
+import { LEGACY_ELEMENT_BY_SYMBOL, LEGACY_ELEMENTS } from '../src/lib/data/elements.legacy';
 import { MODULE_BY_ID } from '../src/lib/data/modules';
 import { PATCH_BY_ID } from '../src/lib/data/patches';
 import { RECIPES } from '../src/lib/data/recipes';
@@ -83,7 +83,7 @@ interface Ancestry {
 }
 
 function tierOf(symbol: string): number {
-	return ELEMENT_BY_SYMBOL.get(symbol)?.tier ?? 0;
+	return LEGACY_ELEMENT_BY_SYMBOL.get(symbol)?.tier ?? 0;
 }
 
 function maxTier(grid: readonly (string | null)[]): number {
@@ -237,7 +237,7 @@ export function searchForTarget(
 		if (budget.nodes <= 0) return;
 		budget.nodes -= 1;
 
-		const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES, prefix);
+		const preview = previewPlacement(run, hand, cell, LEGACY_ELEMENTS, RECIPES, prefix);
 		if (!preview) return;
 
 		if (preview.grid.includes(target)) {
@@ -311,7 +311,7 @@ function findScrapPlan(run: RunState, target: string, ancestry: Ancestry, baseli
 
 		for (let hand = 0; hand < after.hand.length; hand += 1) {
 			for (const spot of emptyCells(after)) {
-				const preview = previewPlacement(after, hand, spot, ELEMENTS, RECIPES);
+				const preview = previewPlacement(after, hand, spot, LEGACY_ELEMENTS, RECIPES);
 				if (!preview || preview.meltdown) continue;
 				const score = scoreGrid(preview.grid, target, ancestry, preview.pressureGain);
 				if (score.hasTarget || progresses(score, baseline)) {
@@ -335,7 +335,7 @@ function casualDecision(run: RunState, target: string): Decision {
 
 	for (let hand = 0; hand < run.hand.length; hand += 1) {
 		for (const cell of emptyCells(run)) {
-			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			const preview = previewPlacement(run, hand, cell, LEGACY_ELEMENTS, RECIPES);
 			if (!preview || preview.meltdown) continue;
 			const placement: Placement = { hand, cell, choices: [], preview };
 
@@ -365,7 +365,7 @@ function competentDecision(run: RunState, target: string, mode: 'competent' | 's
 
 	for (let hand = 0; hand < run.hand.length; hand += 1) {
 		for (const cell of emptyCells(run)) {
-			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			const preview = previewPlacement(run, hand, cell, LEGACY_ELEMENTS, RECIPES);
 			if (!preview) continue;
 			const placement: Placement = { hand, cell, choices: [], preview };
 			const targetLine = preview.grid.includes(target);
@@ -448,7 +448,7 @@ function anyBestPlacement(run: RunState, ancestry: Ancestry, target: string): Pl
 	let bestScore: Score | null = null;
 	for (let hand = 0; hand < run.hand.length; hand += 1) {
 		for (const cell of emptyCells(run)) {
-			const preview = previewPlacement(run, hand, cell, ELEMENTS, RECIPES);
+			const preview = previewPlacement(run, hand, cell, LEGACY_ELEMENTS, RECIPES);
 			if (!preview || preview.meltdown) continue;
 			const score = scoreGrid(preview.grid, target, ancestry, preview.pressureGain);
 			if (!bestScore || better(score, bestScore)) {
@@ -574,7 +574,7 @@ function step(run: RunState, unlocked: readonly string[], policy: Policy): RunSt
 function applyDecision(run: RunState, decision: Decision): RunState | null {
 	if (decision.kind === 'place' && decision.placement) {
 		const { hand, cell, choices } = decision.placement;
-		const next = placeCard(run, hand, cell, ELEMENTS, RECIPES, choices);
+		const next = placeCard(run, hand, cell, LEGACY_ELEMENTS, RECIPES, choices);
 		return next !== run ? next : null;
 	}
 

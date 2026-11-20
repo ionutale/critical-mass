@@ -19,7 +19,8 @@ function defaultStorage(): Storage {
 
 export function createInitialSave(seed = 42): SaveState {
 	return {
-		version: 1,
+		// v2: Task 7 adds the v1 → v2 migration (old runs reset, settings persist).
+		version: 2,
 		run: createRun(seed),
 		meta: {
 			research: 0,
@@ -47,7 +48,7 @@ export function parseSave(raw: string): SaveState | null {
 
 	if (typeof parsed !== 'object' || parsed === null) return null;
 	const save = parsed as Partial<SaveState>;
-	if (save.version !== 1) return null;
+	if (save.version !== 2) return null;
 	if (save.meta && typeof save.meta.research !== 'number') return null;
 	if (!save.settings || typeof save.settings.sound !== 'boolean') return null;
 

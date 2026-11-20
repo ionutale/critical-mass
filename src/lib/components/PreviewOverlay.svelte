@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fade, fly } from 'svelte/transition';
 	import { trapFocus } from '../actions/trapFocus';
-	import { ELEMENT_BY_SYMBOL } from '../data/elements';
+	import { LEGACY_ELEMENT_BY_SYMBOL } from '../data/elements.legacy';
 	import type { PlacementPreview } from '../game/fusion';
 	import { reducedMotion, transitionDuration } from '../stores/motion';
 
@@ -36,11 +36,11 @@
 				{#each preview.steps as step, index (step.step)}
 					<li class="chain-step" style:animation-delay={`${index * 90}ms`}>
 						<p class="equation">
-							<span>{ELEMENT_BY_SYMBOL.get(step.a)?.name ?? step.a}</span>
+							<span>{LEGACY_ELEMENT_BY_SYMBOL.get(step.a)?.name ?? step.a}</span>
 							<span class="op">+</span>
-							<span>{ELEMENT_BY_SYMBOL.get(step.b)?.name ?? step.b}</span>
+							<span>{LEGACY_ELEMENT_BY_SYMBOL.get(step.b)?.name ?? step.b}</span>
 							<span class="op">→</span>
-							<strong>{ELEMENT_BY_SYMBOL.get(step.result)?.name ?? step.result}</strong>
+							<strong>{LEGACY_ELEMENT_BY_SYMBOL.get(step.result)?.name ?? step.result}</strong>
 						</p>
 						<div class="options" role="group" aria-label={`Step ${step.step} options`}>
 							{#each step.options as option, optionIndex (optionIndex)}
@@ -51,8 +51,8 @@
 									onclick={() => onChoose(index, optionIndex)}
 								>
 									<span class="mono">
-										{ELEMENT_BY_SYMBOL.get(option.other)?.symbol ?? option.other} →
-										{ELEMENT_BY_SYMBOL.get(option.result)?.symbol ?? option.result}
+										{LEGACY_ELEMENT_BY_SYMBOL.get(option.other)?.symbol ?? option.other} →
+										{LEGACY_ELEMENT_BY_SYMBOL.get(option.result)?.symbol ?? option.result}
 									</span>
 									<span class="cost mono">+{option.pressure}</span>
 								</button>
@@ -73,7 +73,9 @@
 
 		{#if last}
 			<p class="result">
-				Final tile: <strong>{ELEMENT_BY_SYMBOL.get(last.result)?.symbol ?? last.result}</strong>
+				Final tile: <strong
+					>{LEGACY_ELEMENT_BY_SYMBOL.get(last.result)?.symbol ?? last.result}</strong
+				>
 			</p>
 		{/if}
 

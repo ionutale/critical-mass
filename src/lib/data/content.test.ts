@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { CONTRACTS, contractById } from './contracts';
-import { ELEMENTS } from './elements';
+import { CONTRACTS } from './contracts';
+import { LEGACY_ELEMENTS } from './elements.legacy';
 import { MODULE_BY_ID, MODULES } from './modules';
 import { PATCHES } from './patches';
 import { RECIPES } from './recipes';
-import { UNLOCK_BY_ID, UNLOCKS } from './unlocks';
-import { parseSave } from '../game/storage';
+import { UNLOCKS } from './unlocks';
 import { validateContent } from '../game/validate';
 
 const PRE_EXPANSION_CONTRACT_IDS = [
@@ -121,7 +120,7 @@ const PRE_EXPANSION_ELEMENTS = [
 
 const BOSS_TARGET: Record<1 | 2 | 3, string> = { 1: 'Mg', 2: 'Fe', 3: 'U' };
 
-const elementBySymbol = new Map(ELEMENTS.map((element) => [element.symbol, element]));
+const elementBySymbol = new Map(LEGACY_ELEMENTS.map((element) => [element.symbol, element]));
 
 function reachable(allowCatalyst: boolean): Set<string> {
 	const known = new Set(elementBySymbol.keys());
@@ -170,13 +169,13 @@ describe('content', () => {
 	});
 
 	it('has thirty unique elements and a reachable ladder', () => {
-		expect(ELEMENTS).toHaveLength(30);
-		expect(new Set(ELEMENTS.map((element) => element.symbol)).size).toBe(30);
-		expect(new Set(ELEMENTS.map((element) => element.number)).size).toBe(30);
+		expect(LEGACY_ELEMENTS).toHaveLength(30);
+		expect(new Set(LEGACY_ELEMENTS.map((element) => element.symbol)).size).toBe(30);
+		expect(new Set(LEGACY_ELEMENTS.map((element) => element.number)).size).toBe(30);
 
 		const withoutCatalyst = reachable(false);
 		const withCatalyst = reachable(true);
-		for (const element of ELEMENTS) {
+		for (const element of LEGACY_ELEMENTS) {
 			if (element.heavy) {
 				expect(withCatalyst.has(element.symbol), `${element.symbol} is unreachable`).toBe(true);
 			} else {
@@ -246,7 +245,7 @@ describe('content', () => {
 		const moduleIds = new Set(MODULES.map((module) => module.id));
 		const unlockIds = new Set(UNLOCKS.map((unlock) => unlock.id));
 		const patchIds = new Set(PATCHES.map((patch) => patch.id));
-		const symbols = new Set(ELEMENTS.map((element) => element.symbol));
+		const symbols = new Set(LEGACY_ELEMENTS.map((element) => element.symbol));
 
 		for (const id of PRE_EXPANSION_CONTRACT_IDS) expect(contractIds.has(id), id).toBe(true);
 		for (const id of PRE_EXPANSION_MODULE_IDS) expect(moduleIds.has(id), id).toBe(true);
@@ -258,7 +257,7 @@ describe('content', () => {
 	it('validates the whole contract ladder', () => {
 		expect(
 			validateContent({
-				elements: ELEMENTS,
+				elements: LEGACY_ELEMENTS,
 				recipes: RECIPES,
 				contracts: CONTRACTS,
 				modules: MODULES,
@@ -276,44 +275,5 @@ describe('content', () => {
 		expect(first.count).toBe(1);
 		expect(first.sector).toBe(1);
 		expect(first.slot).toBe(1);
-	});
-
-	it('loads a pre-expansion save without a schema bump', () => {
-		const legacy = {
-			version: 1,
-			run: {
-				seed: 7,
-				contractId: 's1-4b',
-				modules: ['heavy-seed'],
-				patches: ['patch-coolant'],
-				sector: 1,
-				pressure: 12
-			},
-			meta: {
-				research: 6,
-				unlocks: ['card-magnesium', 'module-heavy-seed', 'contract-rider'],
-				stats: { runs: 2, wins: 0, bestSector: 1, contracts: 3 }
-			},
-			settings: { sound: false, reduceMotion: true },
-			introSeen: true
-		};
-
-		const parsed = parseSave(JSON.stringify(legacy));
-
-		expect(parsed).not.toBeNull();
-		expect(parsed!.version).toBe(1);
-		expect(parsed!.run).not.toBeNull();
-		expect(parsed!.run!.contractId).toBe('s1-4b');
-		expect(contractById(parsed!.run!.contractId).id).toBe('s1-4b');
-		expect(contractById(parsed!.run!.contractId).target).toBe('O');
-		expect(parsed!.run!.pressure).toBe(12);
-		expect(parsed!.run!.modules).toEqual(['heavy-seed']);
-		expect(parsed!.run!.patches).toEqual(['patch-coolant']);
-		expect(parsed!.meta.unlocks).toEqual(['card-magnesium', 'module-heavy-seed', 'contract-rider']);
-		expect(parsed!.settings.sound).toBe(false);
-		expect(parsed!.settings.reduceMotion).toBe(true);
-
-		for (const id of parsed!.meta.unlocks) expect(UNLOCK_BY_ID.has(id), id).toBe(true);
-		for (const id of parsed!.run!.modules) expect(MODULE_BY_ID.has(id), id).toBe(true);
 	});
 });

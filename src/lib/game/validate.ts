@@ -1,6 +1,6 @@
 import type {
 	ContractTemplate,
-	ElementRecord,
+	LegacyElementRecord,
 	ModuleRecord,
 	RecipeRecord,
 	UnlockRecord
@@ -12,7 +12,7 @@ export interface ValidationResult {
 }
 
 function closure(
-	elements: readonly ElementRecord[],
+	elements: readonly LegacyElementRecord[],
 	recipes: readonly RecipeRecord[],
 	allowCatalyst: boolean
 ): Set<string> {
@@ -37,7 +37,7 @@ function closure(
 }
 
 export function validateContent(content: {
-	elements: readonly ElementRecord[];
+	elements: readonly LegacyElementRecord[];
 	recipes: readonly RecipeRecord[];
 	contracts: readonly ContractTemplate[];
 	modules?: readonly ModuleRecord[];
