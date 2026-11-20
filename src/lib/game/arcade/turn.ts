@@ -269,41 +269,53 @@ export function placeCard(
 		heat: preview.heatAfter
 	};
 
-	if (preview.overload) return queueMilestones({ ...committed, status: 'overload' });
+	if (preview.overload) return { ...committed, status: 'overload' };
 
 	const afterTurn = endTurn(committed);
 	const resolved =
 		afterTurn.heat >= afterTurn.heatCap ? { ...afterTurn, status: 'overload' as const } : afterTurn;
 
-	return queueMilestones(resolved);
+	return resolved.status === 'active' ? queueMilestones(resolved) : resolved;
+}
+
+/**
+ * Close a Stabilize turn: advance the turn, refresh Scrap, add the passive +3,
+ * and resolve Overload. Stabilize never draws, so this is `endTurn` minus the
+ * draw.
+ */
+function finishStabilize(run: RunState): RunState {
+	const advanced: RunState = { ...run, turn: run.turn + 1, scrapUsed: false };
+	const heated = applyHeat(advanced, PASSIVE_HEAT);
+	const resolved =
+		heated.heat >= heated.heatCap ? { ...heated, status: 'overload' as const } : heated;
+
+	return resolved.status === 'active' ? queueMilestones(resolved) : resolved;
 }
 
 /**
  * Stabilize: discard one card, cool up to 15 Heat but never below the rising
  * floor, apply the passive +3, and end the turn without drawing. The discarded
- * card is the cost; a hand that is already empty still yields a turn (the
- * rising floor guarantees the run still overloads).
+ * card is the cost, so an invalid hand index is a no-op rather than free
+ * cooling. With an empty hand there is nothing to discard, so Stabilize becomes
+ * a pure pass: no cooling, only the passive +3 and the turn advance (the rising
+ * floor still guarantees the run overloads).
  */
 export function stabilize(run: RunState, handIndex: number): RunState {
 	if (run.status !== 'active') return run;
 
-	const cooled = Math.max(heatFloor(run), run.heat - STABILIZE_COOLING);
+	if (run.hand.length === 0) return finishStabilize(run);
+
+	const card = run.hand[handIndex];
+	if (card === undefined) return run;
+
+	const cooled = Math.min(run.heatCap, Math.max(heatFloor(run), run.heat - STABILIZE_COOLING));
 	const withCard: RunState = {
 		...run,
 		...discardFromHand(run, handIndex),
-		heat: Math.min(run.heatCap, cooled)
+		heat: cooled
 	};
 
-	const advanced: RunState = {
-		...withCard,
-		turn: withCard.turn + 1,
-		scrapUsed: false
-	};
-	const heated = applyHeat(advanced, PASSIVE_HEAT);
-	const resolved =
-		heated.heat >= heated.heatCap ? { ...heated, status: 'overload' as const } : heated;
-
-	return queueMilestones(resolved);
+	return finishStabilize(withCard);
 }
 
 /**

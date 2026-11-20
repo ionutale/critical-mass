@@ -323,15 +323,23 @@ describe('stabilize', () => {
 		expect(after.heat).toBe(30 + 3);
 	});
 
-	it('still ends the turn when the hand is empty', () => {
+	it('is a pure pass when the hand is empty: +3, no cooling, no draw', () => {
 		const run = chainRun({ turn: 5, heat: 40, hand: [], deck: ['H'] });
 
 		const after = stabilize(run, 0);
 
 		expect(after.turn).toBe(6);
-		expect(after.heat).toBe(40 - 15 + 3);
+		expect(after.heat).toBe(43);
 		expect(after.hand).toEqual([]);
 		expect(after.deck).toEqual(['H']);
+		expect(after.discard).toEqual(run.discard);
+	});
+
+	it('ignores an out-of-range hand index instead of cooling for free', () => {
+		const run = chainRun({ turn: 10, heat: 70 });
+
+		expect(stabilize(run, 7)).toBe(run);
+		expect(stabilize(run, -1)).toBe(run);
 	});
 
 	it('overloads a stabilize-only loop within 40 turns via the rising floor', () => {
