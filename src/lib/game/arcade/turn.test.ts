@@ -1,8 +1,53 @@
 import { describe, expect, it } from 'vitest';
 import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 import type { ElementSymbol } from '../../types';
-import { createRun, STARTER_DECK } from './turn';
+import { previewPlacement } from './fusion';
+import {
+	applyHeat,
+	createRun,
+	drawToHandSize,
+	endTurn,
+	heatFloor,
+	placeCard,
+	queueMilestones,
+	scrap,
+	stabilize,
+	STARTER_DECK
+} from './turn';
 import type { FusionState } from './types';
+
+const CENTER = 12;
+
+function buildGrid(
+	tiles: readonly (readonly [number, ElementSymbol])[] = []
+): (ElementSymbol | null)[] {
+	const grid = Array<ElementSymbol | null>(25).fill(null);
+	for (const [cell, symbol] of tiles) grid[cell] = symbol;
+	return grid;
+}
+
+/** H at N, E, and S of the center: a 3-step He -> C -> Ne chain. */
+const CHAIN_TILES = [
+	[7, 'H'],
+	[13, 'H'],
+	[17, 'H']
+] as const;
+const CHAIN_CHOICES = [1, 1, 0] as const;
+const FULL_HAND: ElementSymbol[] = ['H', 'Li', 'He', 'Be', 'Na'];
+
+function chainRun(
+	overrides: Partial<ReturnType<typeof createRun>> = {}
+): ReturnType<typeof createRun> {
+	return {
+		...createRun(7),
+		grid: buildGrid(CHAIN_TILES),
+		hand: [...FULL_HAND],
+		deck: ['H', 'Li', 'He', 'Be', 'Na'],
+		discard: [] as ElementSymbol[],
+		heat: 0,
+		...overrides
+	};
+}
 
 function countOf(deck: readonly ElementSymbol[], symbol: ElementSymbol): number {
 	return deck.filter((card) => card === symbol).length;
@@ -140,6 +185,7 @@ describe('initial run state', () => {
 		expect(run.bestChain).toBe(0);
 		expect(run.status).toBe('active');
 		expect(run.pendingDrafts).toBe(0);
+		expect(run.milestonesCrossed).toBe(0);
 		expect(run.upgrades).toEqual([]);
 		expect(run.scrapUsed).toBe(false);
 	});
@@ -164,5 +210,263 @@ describe('initial run state', () => {
 		expect(() => createRun(Number.NaN)).not.toThrow();
 		expect(createRun(Number.NaN)).toEqual(createRun(Number.NaN));
 		expect(createRun(-3)).toEqual(createRun(-3));
+	});
+});
+
+describe('placeCard turn resolution', () => {
+	it('resolves the chain, then adds +3, draws to 5, and resets scrapUsed', () => {
+		const run = chainRun({ scrapUsed: true });
+
+		const after = placeCard(run, 0, CENTER);
+
+		// Chain: He (2) + C (4) + Ne (5) = 11 heat, 20 score; then end-of-turn +3.
+		expect(after.heat).toBe(14);
+		expect(after.score).toBe(20);
+		expect(after.bestChain).toBe(3);
+		expect(after.turn).toBe(run.turn + 1);
+		expect(after.grid[CENTER]).toBe('Ne');
+		expect(after.grid[7]).toBeNull();
+		expect(after.grid[13]).toBeNull();
+		expect(after.grid[17]).toBeNull();
+		// The placed card enters the discard and one card is drawn back.
+		expect(after.discard).toEqual(['H']);
+		expect(after.deck).toEqual(['Li', 'He', 'Be', 'Na']);
+		expect(after.hand).toHaveLength(5);
+		expect(after.hand.at(-1)).toBe('H');
+		expect(after.scrapUsed).toBe(false);
+		expect(after.status).toBe('active');
+	});
+
+	it('commits exactly the previewed grid, score, and heat for non-default choices', () => {
+		const run = chainRun({ heat: 40 });
+		const preview = previewPlacement(run, 0, CENTER, CHAIN_CHOICES)!;
+
+		const after = placeCard(run, 0, CENTER, CHAIN_CHOICES);
+
+		expect(after.grid).toEqual(preview.grid);
+		expect(after.score - run.score).toBe(preview.scoreGain);
+		expect(after.heat).toBe(preview.heatAfter + 3);
+	});
+
+	it('awards score before overload when the chain itself reaches the cap', () => {
+		const run = chainRun({ heat: 95 });
+		const preview = previewPlacement(run, 0, CENTER, CHAIN_CHOICES)!;
+		expect(preview.heatAfter).toBe(100);
+		expect(preview.overload).toBe(true);
+
+		const after = placeCard(run, 0, CENTER, CHAIN_CHOICES);
+
+		expect(after.score - run.score).toBe(preview.scoreGain);
+		expect(after.score - run.score).toBeGreaterThan(0);
+		expect(after.grid).toEqual(preview.grid);
+		expect(after.heat).toBe(preview.heatAfter);
+		expect(after.status).toBe('overload');
+		// A lethal placement does not run the end-of-turn draw.
+		expect(after.turn).toBe(run.turn);
+	});
+
+	it('overloads when the end-of-turn +3 crosses the cap', () => {
+		const run = chainRun({ grid: buildGrid(), heat: 98 });
+
+		const after = placeCard(run, 0, CENTER);
+
+		expect(after.score).toBe(run.score);
+		expect(after.heat).toBe(100);
+		expect(after.status).toBe('overload');
+		expect(after.turn).toBe(run.turn + 1);
+	});
+
+	it('ignores invalid placements', () => {
+		const run = chainRun();
+
+		expect(placeCard(run, 0, CENTER, [])).not.toBe(run);
+		expect(placeCard(run, 9, CENTER)).toBe(run);
+		expect(placeCard(run, 0, 7)).toBe(run);
+		expect(placeCard(run, 0, -1)).toBe(run);
+	});
+
+	it('does not mutate the input run', () => {
+		const run = chainRun();
+		const grid = [...run.grid];
+		const hand = [...run.hand];
+
+		placeCard(run, 0, CENTER);
+
+		expect(run.grid).toEqual(grid);
+		expect(run.hand).toEqual(hand);
+		expect(run.heat).toBe(0);
+		expect(run.score).toBe(0);
+	});
+});
+
+describe('stabilize', () => {
+	it('discards a card, cools 15, adds +3, and does not draw', () => {
+		const run = chainRun({ turn: 10, heat: 70, discard: ['Be'], scrapUsed: true });
+
+		const after = stabilize(run, 2);
+
+		expect(after.hand).toEqual(['H', 'Li', 'Be', 'Na']);
+		expect(after.discard).toEqual(['Be', 'He']);
+		expect(after.heat).toBe(70 - 15 + 3);
+		expect(after.turn).toBe(11);
+		expect(after.deck).toEqual(run.deck);
+		expect(after.hand).toHaveLength(4);
+		expect(after.scrapUsed).toBe(false);
+	});
+
+	it('cools only down to 3 × the current turn', () => {
+		const run = chainRun({ turn: 10, heat: 35 });
+
+		const after = stabilize(run, 0);
+
+		expect(heatFloor(run)).toBe(30);
+		expect(after.heat).toBe(30 + 3);
+	});
+
+	it('still ends the turn when the hand is empty', () => {
+		const run = chainRun({ turn: 5, heat: 40, hand: [], deck: ['H'] });
+
+		const after = stabilize(run, 0);
+
+		expect(after.turn).toBe(6);
+		expect(after.heat).toBe(40 - 15 + 3);
+		expect(after.hand).toEqual([]);
+		expect(after.deck).toEqual(['H']);
+	});
+
+	it('overloads a stabilize-only loop within 40 turns via the rising floor', () => {
+		let run = createRun(7);
+		let turns = 0;
+
+		while (run.status === 'active' && turns < 40) {
+			run = stabilize(run, 0);
+			turns++;
+		}
+
+		expect(run.status).toBe('overload');
+		expect(run.heat).toBe(100);
+		expect(turns).toBeLessThan(40);
+	});
+});
+
+describe('scrap', () => {
+	it('removes one tile without ending the turn or costing a card', () => {
+		const run = chainRun();
+
+		const after = scrap(run, 7);
+
+		expect(after.grid[7]).toBeNull();
+		expect(after.grid[13]).toBe('H');
+		expect(after.scrapUsed).toBe(true);
+		expect(after.turn).toBe(run.turn);
+		expect(after.hand).toEqual(run.hand);
+		expect(after.deck).toEqual(run.deck);
+		expect(after.score).toBe(run.score);
+	});
+
+	it('is limited to once per turn and resets on the next turn', () => {
+		const run = chainRun();
+		const once = scrap(run, 7);
+
+		const twice = scrap(once, 13);
+		expect(twice.grid[13]).toBe('H');
+		expect(twice.grid).toEqual(once.grid);
+
+		const nextTurn = endTurn(once);
+		expect(nextTurn.scrapUsed).toBe(false);
+		expect(scrap(nextTurn, 13).grid[13]).toBeNull();
+	});
+
+	it('ignores empty cells, invalid cells, and tiles after overload', () => {
+		const run = chainRun();
+		expect(scrap(run, 0)).toBe(run);
+		expect(scrap(run, -1)).toBe(run);
+		expect(scrap(run, 25)).toBe(run);
+		expect(scrap({ ...run, status: 'overload' }, 7)).toEqual({ ...run, status: 'overload' });
+	});
+});
+
+describe('endTurn', () => {
+	it('advances the turn, adds +3, and resets scrapUsed', () => {
+		const run = chainRun({ scrapUsed: true, heat: 10 });
+
+		const after = endTurn(run);
+
+		expect(after.turn).toBe(run.turn + 1);
+		expect(after.heat).toBe(13);
+		expect(after.scrapUsed).toBe(false);
+	});
+
+	it('reshuffles the discard when the deck is empty', () => {
+		const run = chainRun({
+			hand: ['H', 'H', 'H', 'H'],
+			deck: [],
+			discard: ['Li', 'He', 'Be', 'Na', 'Mg'],
+			heat: 0
+		});
+
+		const after = endTurn(run);
+
+		expect(after.hand).toHaveLength(5);
+		expect(after.deck).toHaveLength(4);
+		expect(after.discard).toEqual([]);
+		expect(after.hand).toEqual([...run.hand, after.hand[4]]);
+		expect(after.rngState).toBeTypeOf('number');
+	});
+
+	it('draws to hand size when short', () => {
+		const run = chainRun({ hand: ['H', 'H'], deck: ['Li', 'He', 'Be'] });
+
+		const after = drawToHandSize(run);
+
+		expect(after.hand).toHaveLength(5);
+		expect(after.deck).toEqual([]);
+	});
+});
+
+describe('applyHeat', () => {
+	it('adds heat and clamps to the cap', () => {
+		const run = createRun(7);
+
+		expect(applyHeat(run, 11).heat).toBe(11);
+		expect(applyHeat({ ...run, heat: 95 }, 11).heat).toBe(100);
+		expect(applyHeat({ ...run, heat: 100 }, 3)).toEqual({ ...run, heat: 100 });
+	});
+});
+
+describe('milestones', () => {
+	it('queues one draft per milestone passed', () => {
+		const run = createRun(7);
+
+		expect(queueMilestones({ ...run, heat: 24 }).pendingDrafts).toBe(0);
+		expect(queueMilestones({ ...run, heat: 25 }).pendingDrafts).toBe(1);
+		expect(queueMilestones({ ...run, heat: 50 }).pendingDrafts).toBe(2);
+		expect(queueMilestones({ ...run, heat: 75 }).pendingDrafts).toBe(3);
+	});
+
+	it('queues two drafts when a single turn crosses 25 and 50', () => {
+		const hotTurn = queueMilestones({ ...createRun(7), heat: 60 });
+
+		expect(hotTurn.pendingDrafts).toBe(2);
+		// Re-queueing the same state must not queue again.
+		expect(queueMilestones(hotTurn).pendingDrafts).toBe(2);
+	});
+
+	it('never requeues a milestone after the heat is cooled and raised again', () => {
+		const crossed = queueMilestones({ ...createRun(7), heat: 60 });
+		const cooled = queueMilestones({ ...crossed, heat: 10 });
+		const reheated = queueMilestones({ ...cooled, heat: 60 });
+
+		expect(cooled.pendingDrafts).toBe(2);
+		expect(reheated.pendingDrafts).toBe(2);
+	});
+
+	it('queues a draft when the end-of-turn +3 crosses 25', () => {
+		const run = chainRun({ grid: buildGrid(), heat: 23 });
+
+		const after = placeCard(run, 0, CENTER);
+
+		expect(after.heat).toBe(26);
+		expect(after.pendingDrafts).toBe(1);
 	});
 });

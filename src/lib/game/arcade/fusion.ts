@@ -182,6 +182,10 @@ export function resolvePlacement(
 /**
  * Resolve a placement and add the Preview-only heat fields. The resolution is
  * identical to `resolvePlacement`, so Preview and commit cannot diverge.
+ *
+ * `heatAfter` is clamped to the cap exactly as a committed placement is, while
+ * `overload` reports the raw result: the Preview shows the same 100 Heat the
+ * run will hold after a lethal placement.
  */
 export function previewPlacement(
 	run: FusionState,
@@ -192,6 +196,7 @@ export function previewPlacement(
 	const result = resolvePlacement(run, handIndex, cell, choices);
 	if (!result) return null;
 
-	const heatAfter = run.heat + result.heatGain;
-	return { ...result, heatAfter, overload: heatAfter >= run.heatCap };
+	const rawHeat = run.heat + result.heatGain;
+	const heatAfter = Math.min(run.heatCap, rawHeat);
+	return { ...result, heatAfter, overload: rawHeat >= run.heatCap };
 }

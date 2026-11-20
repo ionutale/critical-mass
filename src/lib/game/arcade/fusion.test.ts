@@ -291,6 +291,14 @@ describe('resolvePlacement chains and scoring', () => {
 		expect(atCap.heatAfter).toBe(100);
 		expect(atCap.overload).toBe(true);
 	});
+
+	it('clamps preview heatAfter to the cap so preview equals commit', () => {
+		const preview = previewPlacement(chainRun({ heat: 95 }), 0, CENTER, [1, 1, 0])!;
+
+		expect(preview.heatGain).toBe(11);
+		expect(preview.heatAfter).toBe(100);
+		expect(preview.overload).toBe(true);
+	});
 });
 
 describe('resolvePlacement validation', () => {
