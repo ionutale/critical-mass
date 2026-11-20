@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 import type { ElementSymbol } from '../../types';
 import { previewPlacement } from './fusion';
+import { chooseUpgrade } from './draft';
 import {
 	applyHeat,
 	createRun,
@@ -187,7 +188,7 @@ describe('initial run state', () => {
 		expect(run.pendingDrafts).toBe(0);
 		expect(run.milestonesCrossed).toBe(0);
 		expect(run.upgrades).toEqual([]);
-		expect(run.scrapUsed).toBe(false);
+		expect(run.scrapsUsed).toBe(0);
 	});
 
 	it('exposes the grid as 25 cells with only seed tiles filled', () => {
@@ -214,8 +215,8 @@ describe('initial run state', () => {
 });
 
 describe('placeCard turn resolution', () => {
-	it('resolves the chain, then adds +3, draws to 5, and resets scrapUsed', () => {
-		const run = chainRun({ scrapUsed: true });
+	it('resolves the chain, then adds +3, draws to 5, and resets scrapsUsed', () => {
+		const run = chainRun({ scrapsUsed: 1 });
 
 		const after = placeCard(run, 0, CENTER);
 
@@ -233,7 +234,7 @@ describe('placeCard turn resolution', () => {
 		expect(after.deck).toEqual(['Li', 'He', 'Be', 'Na']);
 		expect(after.hand).toHaveLength(5);
 		expect(after.hand.at(-1)).toBe('H');
-		expect(after.scrapUsed).toBe(false);
+		expect(after.scrapsUsed).toBe(0);
 		expect(after.status).toBe('active');
 	});
 
@@ -301,7 +302,7 @@ describe('placeCard turn resolution', () => {
 
 describe('stabilize', () => {
 	it('discards a card, cools 15, adds +3, and does not draw', () => {
-		const run = chainRun({ turn: 10, heat: 70, discard: ['Be'], scrapUsed: true });
+		const run = chainRun({ turn: 10, heat: 70, discard: ['Be'], scrapsUsed: 1 });
 
 		const after = stabilize(run, 2);
 
@@ -311,7 +312,7 @@ describe('stabilize', () => {
 		expect(after.turn).toBe(11);
 		expect(after.deck).toEqual(run.deck);
 		expect(after.hand).toHaveLength(4);
-		expect(after.scrapUsed).toBe(false);
+		expect(after.scrapsUsed).toBe(0);
 	});
 
 	it('cools only down to 3 × the current turn', () => {
@@ -347,6 +348,11 @@ describe('stabilize', () => {
 		let turns = 0;
 
 		while (run.status === 'active' && turns < 40) {
+			// Milestones still queue drafts, which lock the turn until chosen.
+			if (run.pendingDrafts > 0) {
+				run = chooseUpgrade(run, 0);
+				continue;
+			}
 			run = stabilize(run, 0);
 			turns++;
 		}
@@ -365,7 +371,7 @@ describe('scrap', () => {
 
 		expect(after.grid[7]).toBeNull();
 		expect(after.grid[13]).toBe('H');
-		expect(after.scrapUsed).toBe(true);
+		expect(after.scrapsUsed).toBe(1);
 		expect(after.turn).toBe(run.turn);
 		expect(after.hand).toEqual(run.hand);
 		expect(after.deck).toEqual(run.deck);
@@ -381,7 +387,7 @@ describe('scrap', () => {
 		expect(twice.grid).toEqual(once.grid);
 
 		const nextTurn = endTurn(once);
-		expect(nextTurn.scrapUsed).toBe(false);
+		expect(nextTurn.scrapsUsed).toBe(0);
 		expect(scrap(nextTurn, 13).grid[13]).toBeNull();
 	});
 
@@ -395,14 +401,14 @@ describe('scrap', () => {
 });
 
 describe('endTurn', () => {
-	it('advances the turn, adds +3, and resets scrapUsed', () => {
-		const run = chainRun({ scrapUsed: true, heat: 10 });
+	it('advances the turn, adds +3, and resets scrapsUsed', () => {
+		const run = chainRun({ scrapsUsed: 1, heat: 10 });
 
 		const after = endTurn(run);
 
 		expect(after.turn).toBe(run.turn + 1);
 		expect(after.heat).toBe(13);
-		expect(after.scrapUsed).toBe(false);
+		expect(after.scrapsUsed).toBe(0);
 	});
 
 	it('reshuffles the discard when the deck is empty', () => {

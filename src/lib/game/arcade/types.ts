@@ -13,4 +13,6 @@ export interface FusionState {
 	heatCap: number;
 	turn: number;
 	upgrades: string[];
+	/** True once this turn's Heat Sink has absorbed the first Fusion. Optional for minimal fixtures. */
+	heatSinkUsed?: boolean;
 }

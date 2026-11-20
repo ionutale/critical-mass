@@ -1,4 +1,6 @@
 import { ELEMENTS } from '../../data/elements';
+import { UPGRADE_EFFECTS, hasUpgrade } from '../../data/upgrades';
+import type { UpgradeId } from '../../data/upgrades';
 import type { ElementRecord, ElementSymbol } from '../../types';
 import { pickIndex, shuffleWithState } from '../rng';
 import { previewPlacement } from './fusion';
@@ -23,7 +25,14 @@ export interface RunState extends FusionState {
 	pendingDrafts: number;
 	/** High-water count of Heat milestones already queued (0–3), so cooling cannot refund a draft. */
 	milestonesCrossed: number;
-	scrapUsed: boolean;
+	/** Owned Upgrades; card upgrades may appear more than once. */
+	upgrades: UpgradeId[];
+	/** Scraps spent this turn (0..`scrapLimit(run)`). */
+	scrapsUsed: number;
+	/** True once this turn's Heat Sink has absorbed the first Fusion. */
+	heatSinkUsed: boolean;
+	/** True once Echo has granted its one free Stabilize draw. */
+	echoUsed: boolean;
 }
 
 /** Starter Deck (10): H×5, Li×2, He×2, Be×1. */
@@ -143,13 +152,27 @@ export function createRun(seed: number, unlocked: readonly string[] = []): RunSt
 		pendingDrafts: 0,
 		milestonesCrossed: 0,
 		upgrades: [],
-		scrapUsed: false
+		scrapsUsed: 0,
+		heatSinkUsed: false,
+		echoUsed: false
 	};
 }
 
 /** Heat can never be cooled below the passive Heat already accumulated. */
 export function heatFloor(run: RunState): number {
 	return PASSIVE_HEAT * run.turn;
+}
+
+/** Cards held between turns; Deep Hand raises the base hand size by 1. */
+export function handSize(run: RunState): number {
+	return (
+		HAND_SIZE + (hasUpgrade(run, 'deep-hand') ? UPGRADE_EFFECTS['deep-hand'].handSizeBonus : 0)
+	);
+}
+
+/** Scraps available this turn; Salvage raises the once-per-turn limit to 2. */
+export function scrapLimit(run: RunState): number {
+	return hasUpgrade(run, 'salvage') ? UPGRADE_EFFECTS.salvage.scrapsPerTurn : 1;
 }
 
 /**
@@ -210,7 +233,7 @@ function drawOne(run: RunState): RunState {
 export function drawToHandSize(run: RunState): RunState {
 	let next = run;
 
-	while (next.hand.length < HAND_SIZE) {
+	while (next.hand.length < handSize(next)) {
 		const drawn = drawOne(next);
 		if (drawn === next) break;
 		next = drawn;
@@ -221,11 +244,16 @@ export function drawToHandSize(run: RunState): RunState {
 
 /**
  * Close a turn: advance the turn counter, add the passive +3 Heat, draw back to
- * hand size, and refresh the once-per-turn Scrap. Overload is checked by the
- * action that ends the turn (a Placement or Stabilize).
+ * hand size, and refresh the once-per-turn Scrap and Heat Sink. Overload is
+ * checked by the action that ends the turn (a Placement or Stabilize).
  */
 export function endTurn(run: RunState): RunState {
-	const advanced: RunState = { ...run, turn: run.turn + 1, scrapUsed: false };
+	const advanced: RunState = {
+		...run,
+		turn: run.turn + 1,
+		scrapsUsed: 0,
+		heatSinkUsed: false
+	};
 	return drawToHandSize(applyHeat(advanced, PASSIVE_HEAT));
 }
 
@@ -255,10 +283,13 @@ export function placeCard(
 	cell: number,
 	choices: readonly number[] = []
 ): RunState {
-	if (run.status !== 'active') return run;
+	if (run.status !== 'active' || run.pendingDrafts > 0) return run;
 
 	const preview = previewPlacement(run, handIndex, cell, choices);
 	if (!preview) return run;
+
+	const heatSinkUsed =
+		run.heatSinkUsed || (hasUpgrade(run, 'heat-sink') && preview.steps.length > 0);
 
 	const committed: RunState = {
 		...run,
@@ -266,7 +297,8 @@ export function placeCard(
 		grid: preview.grid,
 		score: run.score + preview.scoreGain,
 		bestChain: Math.max(run.bestChain, preview.steps.length),
-		heat: preview.heatAfter
+		heat: preview.heatAfter,
+		heatSinkUsed
 	};
 
 	if (preview.overload) return { ...committed, status: 'overload' };
@@ -279,36 +311,48 @@ export function placeCard(
 }
 
 /**
- * Close a Stabilize turn: advance the turn, refresh Scrap, add the passive +3,
- * and resolve Overload. Stabilize never draws, so this is `endTurn` minus the
- * draw.
+ * Close a Stabilize turn: advance the turn, refresh Scrap and Heat Sink, add the
+ * passive +3, and resolve Overload. Echo makes the first Stabilize of the run
+ * draw back to hand size like a Place turn; every later Stabilize draws nothing.
  */
 function finishStabilize(run: RunState): RunState {
-	const advanced: RunState = { ...run, turn: run.turn + 1, scrapUsed: false };
+	const echoDraw =
+		hasUpgrade(run, 'echo') && UPGRADE_EFFECTS.echo.firstStabilizeDraws && !run.echoUsed;
+	const advanced: RunState = {
+		...run,
+		turn: run.turn + 1,
+		scrapsUsed: 0,
+		heatSinkUsed: false,
+		echoUsed: run.echoUsed || echoDraw
+	};
 	const heated = applyHeat(advanced, PASSIVE_HEAT);
-	const resolved =
-		heated.heat >= heated.heatCap ? { ...heated, status: 'overload' as const } : heated;
+	const drawn = echoDraw ? drawToHandSize(heated) : heated;
+	const resolved = drawn.heat >= drawn.heatCap ? { ...drawn, status: 'overload' as const } : drawn;
 
 	return resolved.status === 'active' ? queueMilestones(resolved) : resolved;
 }
 
 /**
- * Stabilize: discard one card, cool up to 15 Heat but never below the rising
- * floor, apply the passive +3, and end the turn without drawing. The discarded
- * card is the cost, so an invalid hand index is a no-op rather than free
- * cooling. With an empty hand there is nothing to discard, so Stabilize becomes
- * a pure pass: no cooling, only the passive +3 and the turn advance (the rising
- * floor still guarantees the run overloads).
+ * Stabilize: discard one card, cool up to 15 Heat (30 with Coolant) but never
+ * below the rising floor, apply the passive +3, and end the turn without
+ * drawing. The discarded card is the cost, so an invalid hand index is a no-op
+ * rather than free cooling. With an empty hand there is nothing to discard, so
+ * Stabilize becomes a pure pass: no cooling, only the passive +3 and the turn
+ * advance (the rising floor still guarantees the run overloads).
+ *
+ * The whole action is blocked while an Upgrade draft is pending.
  */
 export function stabilize(run: RunState, handIndex: number): RunState {
-	if (run.status !== 'active') return run;
+	if (run.status !== 'active' || run.pendingDrafts > 0) return run;
 
 	if (run.hand.length === 0) return finishStabilize(run);
 
 	const card = run.hand[handIndex];
 	if (card === undefined) return run;
 
-	const cooled = Math.min(run.heatCap, Math.max(heatFloor(run), run.heat - STABILIZE_COOLING));
+	const cooling =
+		STABILIZE_COOLING + (hasUpgrade(run, 'coolant') ? UPGRADE_EFFECTS.coolant.coolingBonus : 0);
+	const cooled = Math.min(run.heatCap, Math.max(heatFloor(run), run.heat - cooling));
 	const withCard: RunState = {
 		...run,
 		...discardFromHand(run, handIndex),
@@ -319,16 +363,18 @@ export function stabilize(run: RunState, handIndex: number): RunState {
 }
 
 /**
- * Remove one tile for free. Scrap is once per turn and does not end the turn,
- * so it can always clear a soft-locked board without spending a card.
+ * Remove one tile for free. Scrap is limited per turn (once, or twice with
+ * Salvage) and does not end the turn, so it can always clear a soft-locked
+ * board without spending a card.
  */
 export function scrap(run: RunState, cell: number): RunState {
-	if (run.status !== 'active' || run.scrapUsed) return run;
+	if (run.status !== 'active' || run.pendingDrafts > 0) return run;
+	if (run.scrapsUsed >= scrapLimit(run)) return run;
 	if (!Number.isInteger(cell) || cell < 0 || cell >= CELL_COUNT) return run;
 	if (run.grid[cell] == null) return run;
 
 	const grid = [...run.grid];
 	grid[cell] = null;
 
-	return { ...run, grid, scrapUsed: true };
+	return { ...run, grid, scrapsUsed: run.scrapsUsed + 1 };
 }

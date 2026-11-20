@@ -1,4 +1,5 @@
 import { ELEMENT_BY_SYMBOL, elementAt, rarityOf } from '../../data/elements';
+import { UPGRADE_EFFECTS, hasUpgrade } from '../../data/upgrades';
 import type { ElementSymbol } from '../../types';
 import type { FusionState } from './types';
 
@@ -77,6 +78,54 @@ function neighbours(cell: number): number[] {
 }
 
 /**
+ * Score for one step after Upgrade modifiers. Multipliers are applied in a
+ * fixed order and rounded once, so Preview and commit always agree.
+ */
+function scoreFor(
+	step: number,
+	rarity: number,
+	valence: number,
+	upgrades: readonly string[]
+): number {
+	let points = step * rarity;
+
+	if (
+		hasUpgrade({ upgrades }, 'chain-reaction') &&
+		step >= UPGRADE_EFFECTS['chain-reaction'].minStep
+	) {
+		points *= UPGRADE_EFFECTS['chain-reaction'].scoreMultiplier;
+	}
+
+	if (
+		hasUpgrade({ upgrades }, 'rarity-bonus') &&
+		valence === UPGRADE_EFFECTS['rarity-bonus'].valence
+	) {
+		points *= UPGRADE_EFFECTS['rarity-bonus'].scoreMultiplier;
+	}
+
+	return Math.round(points);
+}
+
+/**
+ * Base heat for a step, after Upgrade modifiers: Heat Sink makes the first
+ * fusion free, and Efficient Fusion removes 1 from every other fusion (min 1).
+ */
+function heatFor(
+	step: number,
+	valence: number,
+	upgrades: readonly string[],
+	freeFirstFusion: boolean
+): number {
+	if (freeFirstFusion && step === 1) return 0;
+
+	// The first fusion costs only its result valence; every later step costs +1.
+	const base = valence + (step > 1 ? 1 : 0);
+	if (!hasUpgrade({ upgrades }, 'efficient')) return base;
+
+	return Math.max(1, base - UPGRADE_EFFECTS.efficient.heatReduction);
+}
+
+/**
  * Build the option for fusing `active` with `other` at a 1-based chain step,
  * or null when the valence sum is too high or the result leaves the table.
  */
@@ -84,7 +133,9 @@ function fusableOption(
 	active: ElementSymbol,
 	cell: number,
 	other: ElementSymbol,
-	step: number
+	step: number,
+	upgrades: readonly string[],
+	freeFirstFusion: boolean
 ): FusionOption | null {
 	const activeRecord = ELEMENT_BY_SYMBOL.get(active);
 	const otherRecord = ELEMENT_BY_SYMBOL.get(other);
@@ -102,9 +153,8 @@ function fusableOption(
 		other,
 		result: result.symbol,
 		rarity,
-		points: step * rarity,
-		// The first fusion costs only its result valence; every later step costs +1.
-		heat: result.valence + (step > 1 ? 1 : 0)
+		points: scoreFor(step, rarity, result.valence, upgrades),
+		heat: heatFor(step, result.valence, upgrades, freeFirstFusion)
 	};
 }
 
@@ -136,6 +186,10 @@ export function resolvePlacement(
 	const steps: FusionStep[] = [];
 	let scoreGain = 0;
 	let heatGain = 0;
+	const freeFirstFusion =
+		hasUpgrade(run, 'heat-sink') &&
+		UPGRADE_EFFECTS['heat-sink'].freeFirstFusion &&
+		!run.heatSinkUsed;
 
 	for (let stepIndex = 0; stepIndex < CHAIN_CAP; stepIndex++) {
 		const step = stepIndex + 1;
@@ -144,7 +198,7 @@ export function resolvePlacement(
 		for (const candidate of neighbours(cell)) {
 			const other = grid[candidate];
 			if (!other) continue;
-			const option = fusableOption(active, candidate, other, step);
+			const option = fusableOption(active, candidate, other, step, run.upgrades, freeFirstFusion);
 			if (option) options.push(option);
 		}
 
