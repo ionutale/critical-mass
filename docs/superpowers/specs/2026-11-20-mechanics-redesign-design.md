@@ -113,7 +113,7 @@ The compact set is **12 real light elements**, one for each (valence, mass) pair
 
 **Fusion rule:** when a placed Tile has a neighbouring Tile — **orthogonal or diagonal** (8-way adjacency) — whose Valence sum is **≤ 4**, the pair fuses. Both Tiles are consumed and replaced by the Element at **(sum valence, higher mass tier)** on the same Cell as the placed Tile. The chain repeats from the result while a matching neighbour exists.
 
-Examples: H(1,1)+H(1,1) → He(2,1); Li(1,2)+He(2,1) → Be(2,2); C(3,1)+H(1,1) → Ne(4,1); Mg(2,3)+He(2,1) → Fe(4,3).
+Examples: H(1,1)+H(1,1) → He(2,1); Li(1,2)+He(2,1) → N(3,2); C(3,1)+H(1,1) → Ne(4,1); Mg(2,3)+He(2,1) → Fe(4,3).
 
 - **Rarity = valence × mass tier** (2–12).
 - **Valence-4 results are terminal**: they cannot fuse further. They score the most per fusion but occupy a Cell permanently until Scrapped — the central space-versus-points trade-off.
