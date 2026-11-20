@@ -3,6 +3,10 @@ import type { ElementSymbol } from '../types';
 /**
  * Every concrete Upgrade the first-pass arcade pool can offer.
  * Cards widen the deck; modifiers change the run's rules for the rest of the run.
+ *
+ * `add-n`, `add-si`, and `add-mg` are unlock-only card upgrades defined in
+ * `data/arcade/unlocks.ts`; they stay out of `UPGRADES` so the base pool is
+ * unchanged for a fresh save.
  */
 export type UpgradeId =
 	| 'add-h-2'
@@ -12,6 +16,9 @@ export type UpgradeId =
 	| 'add-be'
 	| 'add-na'
 	| 'add-o'
+	| 'add-n'
+	| 'add-si'
+	| 'add-mg'
 	| 'coolant'
 	| 'efficient'
 	| 'chain-reaction'

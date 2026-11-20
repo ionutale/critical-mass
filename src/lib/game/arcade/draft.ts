@@ -1,3 +1,4 @@
+import { UNLOCK_UPGRADE_CARDS, unlockedUpgradeIds } from '../../data/arcade/unlocks';
 import { UPGRADE_CARDS, UPGRADES } from '../../data/upgrades';
 import type { UpgradeId } from '../../data/upgrades';
 import { pickIndex } from '../rng';
@@ -10,12 +11,19 @@ const DRAFT_SIZE = 3;
 
 /**
  * The valid pool for this run: all card upgrades (they may be drafted again)
- * plus every modifier the run does not already own.
+ * plus every modifier the run does not already own, then any card upgrades
+ * unlocked by the meta save.
  */
-function draftPool(upgrades: readonly string[]): UpgradeId[] {
-	return UPGRADES.filter(
+function draftPool(upgrades: readonly string[], unlocked: readonly string[]): UpgradeId[] {
+	const pool = UPGRADES.filter(
 		(upgrade) => upgrade.kind === 'card' || !upgrades.includes(upgrade.id)
 	).map((upgrade) => upgrade.id);
+
+	for (const id of unlockedUpgradeIds(unlocked)) {
+		if (!pool.includes(id)) pool.push(id);
+	}
+
+	return pool;
 }
 
 /**
@@ -26,9 +34,10 @@ function draftPool(upgrades: readonly string[]): UpgradeId[] {
  */
 function rollDraft(
 	state: number,
-	upgrades: readonly string[]
+	upgrades: readonly string[],
+	unlocked: readonly string[]
 ): { ids: UpgradeId[]; state: number } {
-	const remaining = draftPool(upgrades);
+	const remaining = draftPool(upgrades, unlocked);
 	const ids: UpgradeId[] = [];
 	let current = state;
 
@@ -51,7 +60,7 @@ function rollDraft(
  * `chooseUpgrade` is what advances the run's RNG stream.
  */
 export function generateDraft(run: RunState): UpgradeId[] {
-	return rollDraft(run.rngState, run.upgrades).ids;
+	return rollDraft(run.rngState, run.upgrades, run.unlocked).ids;
 }
 
 /**
@@ -63,15 +72,17 @@ export function chooseUpgrade(run: RunState, index: number): RunState {
 	if (run.status !== 'active' || run.pendingDrafts <= 0) return run;
 	if (!Number.isInteger(index)) return run;
 
-	const { ids, state } = rollDraft(run.rngState, run.upgrades);
+	const { ids, state } = rollDraft(run.rngState, run.upgrades, run.unlocked);
 	const chosen = ids[index];
 	if (!chosen) return run;
+
+	const cards = UPGRADE_CARDS.get(chosen) ?? UNLOCK_UPGRADE_CARDS.get(chosen) ?? [];
 
 	return {
 		...run,
 		rngState: state,
 		upgrades: [...run.upgrades, chosen],
-		discard: [...run.discard, ...(UPGRADE_CARDS.get(chosen) ?? [])],
+		discard: [...run.discard, ...cards],
 		pendingDrafts: run.pendingDrafts - 1
 	};
 }

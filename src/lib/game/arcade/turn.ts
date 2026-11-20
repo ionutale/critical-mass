@@ -1,3 +1,4 @@
+import { applyStarterUnlocks } from '../../data/arcade/unlocks';
 import { ELEMENTS } from '../../data/elements';
 import { UPGRADE_EFFECTS, hasUpgrade } from '../../data/upgrades';
 import type { UpgradeId } from '../../data/upgrades';
@@ -33,6 +34,8 @@ export interface RunState extends FusionState {
 	heatSinkUsed: boolean;
 	/** True once Echo has granted its one free Stabilize draw. */
 	echoUsed: boolean;
+	/** Meta unlock ids earned by the save that created this run. */
+	unlocked: string[];
 }
 
 /** Starter Deck (10): H×5, Li×2, He×2, Be×1. */
@@ -110,19 +113,19 @@ function seedTiles(state: number): { tiles: SeedTile[]; state: number } {
 }
 
 /**
- * Create a fresh, fully deterministic run: shuffle the starter deck, seed the
- * reactor with one or two tiles, and deal the opening hand.
+ * Create a fresh, fully deterministic run: apply unlocked starter cards,
+ * shuffle the deck, seed the reactor with one or two tiles, and deal the
+ * opening hand.
  *
- * `unlocked` is the meta-progression hook for alternate starters; it is
- * accepted now so callers have a stable signature and has no effect until the
- * unlock pool lands (Task 6).
+ * Unlocks only substitute starter cards; they never change the deck size or a
+ * base stat. The opening hand uses `handSize`, so a future hand-size option is
+ * honored at creation time as well as on later draws.
  */
 export function createRun(seed: number, unlocked: readonly string[] = []): RunState {
-	void unlocked;
-
 	let rngState = normalizeSeed(seed);
 
-	const shuffled = shuffleWithState(STARTER_DECK, rngState);
+	const starter = applyStarterUnlocks(STARTER_DECK, unlocked);
+	const shuffled = shuffleWithState(starter, rngState);
 	rngState = shuffled.state;
 
 	const seeded = seedTiles(rngState);
@@ -133,16 +136,13 @@ export function createRun(seed: number, unlocked: readonly string[] = []): RunSt
 		grid[tile.cell] = tile.symbol;
 	}
 
-	const deck = [...shuffled.items];
-	const hand = deck.splice(0, HAND_SIZE);
-
-	return {
+	const base: RunState = {
 		seed,
 		rngState,
 		turn: 1,
 		grid,
-		deck,
-		hand,
+		deck: [],
+		hand: [],
 		discard: [],
 		heat: 0,
 		heatCap: HEAT_CAP,
@@ -154,8 +154,14 @@ export function createRun(seed: number, unlocked: readonly string[] = []): RunSt
 		upgrades: [],
 		scrapsUsed: 0,
 		heatSinkUsed: false,
-		echoUsed: false
+		echoUsed: false,
+		unlocked: [...unlocked]
 	};
+
+	const deck = [...shuffled.items];
+	const hand = deck.splice(0, handSize(base));
+
+	return { ...base, deck, hand };
 }
 
 /** Heat can never be cooled below the passive Heat already accumulated. */

@@ -87,9 +87,14 @@ describe('createRun determinism', () => {
 		expect(tilesOf(createRun(7))).toEqual(tilesOf(createRun(7)));
 	});
 
-	it('ignores the unlocked list until unlocks are implemented', () => {
-		expect(createRun(7, [])).toEqual(createRun(7));
-		expect(createRun(7, ['alternate-starter'])).toEqual(createRun(7));
+	it('records unlocks but ignores unknown ids', () => {
+		const base = createRun(7);
+		const unknown = createRun(7, ['alternate-starter']);
+
+		expect(unknown.unlocked).toEqual(['alternate-starter']);
+		expect(unknown.hand).toEqual(base.hand);
+		expect(unknown.deck).toEqual(base.deck);
+		expect(unknown.grid).toEqual(base.grid);
 	});
 });
 
@@ -189,6 +194,7 @@ describe('initial run state', () => {
 		expect(run.milestonesCrossed).toBe(0);
 		expect(run.upgrades).toEqual([]);
 		expect(run.scrapsUsed).toBe(0);
+		expect(run.unlocked).toEqual([]);
 	});
 
 	it('exposes the grid as 25 cells with only seed tiles filled', () => {
