@@ -40,11 +40,13 @@
 ### Task 1: Types and the 12-element table
 
 **Files:**
+
 - Modify: `src/lib/types.ts` (replace game types; keep shared settings types)
 - Rewrite: `src/lib/data/elements.ts`
 - Test: `src/lib/data/elements.test.ts`
 
 **Interfaces:**
+
 - Produces: `ElementSymbol`, `ElementRecord { symbol; name; valence: 1|2|3|4; mass: 1|2|3 }`, `ELEMENTS`, `ELEMENT_BY_SYMBOL`, `elementAt(valence, mass): ElementRecord | undefined`, `rarityOf(element): number`.
 
 - [ ] **Step 1: Write failing tests** in `elements.test.ts`: exactly 12 elements, one per (valence 1–4, mass 1–3) pair; `elementAt(2, 3)?.symbol === 'Mg'`; `elementAt(4, 3)?.symbol === 'Fe'`; `rarityOf(elementAt(4, 3)!) === 12`; every symbol unique; real light-element names.
@@ -58,10 +60,12 @@
 ### Task 2: Fusion, chains, preview, and commit
 
 **Files:**
+
 - Rewrite: `src/lib/game/fusion.ts`
 - Test: `src/lib/game/fusion.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 elements/helpers; `RunState` from types.
 - Produces: `FusionOption`, `FusionStep`, `PlacementResult`, `PlacementPreview`; `resolvePlacement(run, handIndex, cell, choices?: readonly number[]): PlacementResult | null`; `previewPlacement(...same...): PlacementPreview | null`.
 - Types: `FusionOption { cell; other; result; rarity; points; heat }`; `FusionStep { step; a; b; result; cell; options: FusionOption[]; choice; rarity; points; heat }`; `PlacementPreview { steps; grid; scoreGain; heatGain; heatAfter; overload }`.
@@ -78,11 +82,13 @@
 ### Task 3: Run creation, deck, hand, and seed tiles
 
 **Files:**
+
 - Rewrite: `src/lib/game/turn.ts` (creation only in this task)
 - Rewrite: `src/lib/game/rng.ts` if signatures change
 - Test: `src/lib/game/turn.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 1 elements; `RunState`.
 - Produces: `createRun(seed: number, unlocked?: readonly string[]): RunState`; starter deck constant; deterministic seed tiles.
 - `RunState` fields: `seed, rngState, turn, grid: (ElementSymbol|null)[25], deck, hand, discard, heat, heatCap: 100, score, bestChain, status: 'active'|'overload', pendingDrafts, upgrades, scrapUsed`.
@@ -98,10 +104,12 @@
 ### Task 4: Turn actions — place, stabilize, scrap, heat floor, overload order
 
 **Files:**
+
 - Modify: `src/lib/game/turn.ts`
 - Test: `src/lib/game/turn.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 2 `resolvePlacement`/`previewPlacement`; Task 3 `createRun`.
 - Produces: `placeCard(run, handIndex, cell, choices?: readonly number[]): RunState`; `endTurn(run): RunState`; `stabilize(run, handIndex): RunState`; `scrap(run, cell): RunState`; `drawToHandSize(run): RunState`; `applyHeat(run, amount): RunState`; `heatFloor(run): number`; `queueMilestones(run): RunState`.
 
@@ -116,12 +124,14 @@
 ### Task 5: Upgrades, drafts, and milestone queue
 
 **Files:**
+
 - Create: `src/lib/data/upgrades.ts`
 - Create: `src/lib/game/draft.ts`
 - Modify: `src/lib/game/fusion.ts` and `turn.ts` (effect hooks)
 - Test: `src/lib/game/draft.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 4 `pendingDrafts`; Tasks 2–4 engine.
 - Produces: `UpgradeId`, `UpgradeRecord { id; name; description; kind: 'card'|'modifier' }`, `UPGRADES`, `generateDraft(run): UpgradeId[]`, `chooseUpgrade(run, index): RunState`; modifiers read through `hasUpgrade(run, id)`.
 - Concrete pool: `add-h-2`, `add-he-2`, `add-li`, `add-c`, `add-be`, `add-na`, `add-o`, `coolant`, `efficient`, `chain-reaction`, `salvage`, `deep-hand`, `heat-sink`, `rarity-bonus`, `echo`.
@@ -137,11 +147,13 @@
 ### Task 6: Meta unlocks and best score
 
 **Files:**
+
 - Rewrite: `src/lib/data/unlocks.ts`
 - Create: `src/lib/game/meta.ts`
 - Test: `src/lib/game/meta.test.ts`
 
 **Interfaces:**
+
 - Consumes: `MetaState`; Tasks 1/3/5 content.
 - Produces: `UnlockRecord { id; name; description; threshold: number; metric: 'totalScore'|'bestChain'|'runs' }`, `UNLOCKS`, `evaluateUnlocks(meta): string[]` (newly unlocked), `runStats(run): { score; chain; turns }`.
 - Unlocks add alternate starter cards, extra upgrade-pool entries, and challenge modifiers; none gate an Element or Rarity.
@@ -157,10 +169,12 @@
 ### Task 7: Save schema v2 and migration
 
 **Files:**
+
 - Modify: `src/lib/game/storage.ts`
 - Test: `src/lib/game/storage.test.ts`
 
 **Interfaces:**
+
 - Consumes: `RunState`, `MetaState`, `createRun`.
 - Produces: `SaveState version: 2`, `createInitialSave(seed?)`, `parseSave`, `loadSave`, `saveGame` with v1 migration.
 
@@ -175,10 +189,12 @@
 ### Task 8: Store wiring
 
 **Files:**
+
 - Rewrite: `src/lib/stores/game.ts`
 - Test: `src/lib/stores/game.test.ts`
 
 **Interfaces:**
+
 - Consumes: Tasks 2–7.
 - Produces: `save`, `run`, `recovered`, `initGame`, `newRun`, `place(handIndex, cell, choices?)`, `stabilize(handIndex)`, `scrap(cell)`, `chooseUpgrade(index)`, `setSetting`, `resetRun`, `resetAll`; derived `locked` (pending drafts or overload).
 
@@ -193,11 +209,13 @@
 ### Task 9: Board, hand, heat bar, score, and action controls
 
 **Files:**
+
 - Create: `src/lib/components/Board.svelte`, `Hand.svelte`, `HeatBar.svelte`, `ScoreDisplay.svelte`, `PreviewPanel.svelte`
 - Rewrite: `src/lib/components/RunScreen.svelte`
 - Test: `src/lib/components/run.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 8 store.
 - Produces: presentational components driven by `run`; `Board` exposes cell callbacks; `Hand` exposes card selection; `HeatBar` shows milestones; `PreviewPanel` shows steps/score/heat.
 
@@ -212,11 +230,13 @@
 ### Task 10: Drag gestures, live preview, keyboard parity, swipes
 
 **Files:**
+
 - Create: `src/lib/actions/dragPlacement.ts` (pointer drag + ghost)
 - Modify: `RunScreen.svelte`, `Hand.svelte`, `Board.svelte`
 - Test: `src/lib/components/run.test.ts`
 
 **Interfaces:**
+
 - Consumes: Task 9 components; Task 8 store.
 - Produces: `dragPlacement` action/API: `begin(cardIndex)`, live `hoverCell`, `commit()`, `cancel()`; keyboard handler (arrows move ghost, Enter/Space commit, Escape cancel); swipe mapping (up → Stabilize picker, tile-off → Scrap, down → cancel).
 
@@ -231,12 +251,14 @@
 ### Task 11: Continuous choreography
 
 **Files:**
+
 - Create: `src/lib/components/choreography.ts`
 - Create: `src/lib/components/ChainPlayback.svelte` (or reuse/rewrite `FusionPlayback.svelte`)
 - Modify: `RunScreen.svelte`, `neon.css`, `src/lib/stores/motion.ts`
 - Test: `src/lib/components/run.test.ts`
 
 **Interfaces:**
+
 - Consumes: `$reducedMotion`; Task 10 interaction.
 - Produces: `flight(from: Element, to: Element, opts)`, `mergeGhosts(...)`, `pulse(el)`, `tweenNumber(el, from, to)`; all no-op/instant when `reducedMotion` or WAAPI is absent.
 
@@ -251,11 +273,13 @@
 ### Task 12: Draft, end, title, unlocks, and how-to screens
 
 **Files:**
+
 - Rewrite: `DraftOverlay.svelte`, `EndScreen.svelte`, `TitleScreen.svelte`, `HowToPlay.svelte`, `App.svelte`
 - Create: `UnlocksScreen.svelte`; remove `ResearchLab.svelte` references
 - Test: `src/lib/components/meta.test.ts` (component cases)
 
 **Interfaces:**
+
 - Consumes: Tasks 5–8, 11.
 - Produces: `DraftOverlay` 1-of-3 with keyboard; `EndScreen` (score, best, chain, unlocks, play again); `TitleScreen` (play, how-to, unlocks, settings, best score, seed); `UnlocksScreen` (locked/unlocked progress); `HowToPlay` (new rules + worked example).
 
@@ -270,6 +294,7 @@
 ### Task 13: Remove the old game systems
 
 **Files:**
+
 - Delete: `src/lib/data/contracts.ts`, `modules.ts`, `patches.ts`, `recipes.ts`, `src/lib/game/contracts.ts`, `effects.ts`, `validate.ts` (and their tests), `ResearchLab.svelte`, `SectorTransition.svelte`, `PressureGauge.svelte`; delete `FusionPlayback.svelte` if replaced by `ChainPlayback`. Keep `CardPicker.svelte` as the Stabilize card picker.
 - Modify: `src/lib/index.ts`, `src/lib/stores/*`, any imports.
 - Test: build + full unit suite.
@@ -284,11 +309,13 @@
 ### Task 14: Balance harness for the arcade loop
 
 **Files:**
+
 - Rewrite: `scripts/balance.ts` (or `src/lib/game/balance.ts` + thin script)
 - Create: `src/lib/game/balance.test.ts`
 - Modify: `package.json` scripts if needed
 
 **Interfaces:**
+
 - Consumes: Tasks 2–8.
 - Produces: `casualPlay(seed, unlocked): Result`, `plannerPlay(seed, unlocked): Result`, `report(results)`; `Result { seed; status; score; turns; bestChain; upgrades; stalled }`.
 
@@ -303,10 +330,12 @@
 ### Task 15: E2E, full gate, and real-browser check
 
 **Files:**
+
 - Rewrite: `e2e/*.spec.ts` for the new game
 - Modify: `README.md`, `HowToPlay` copy if needed
 
 **Interfaces:**
+
 - Consumes: all prior tasks.
 
 - [ ] **Step 1: Rewrite e2e** for: cold start and first placement; a full short run to Overload; an upgrade draft; reload/resume; PWA/offline; keyboard-only placement; touch drag at 390×844; reduced-motion run (no motion layer); axe audits on title/run/draft/end; 44 px targets.

@@ -104,12 +104,12 @@ Every Element has two game properties:
 
 The compact set is **12 real light elements**, one for each (valence, mass) pair. These are game properties, not chemical claims.
 
-| Valence | Mass 1 | Mass 2 | Mass 3 |
-|---|---|---|---|
-| 1 | Hydrogen (H) | Lithium (Li) | Sodium (Na) |
-| 2 | Helium (He) | Beryllium (Be) | Magnesium (Mg) |
-| 3 | Carbon (C) | Nitrogen (N) | Oxygen (O) |
-| 4 | Neon (Ne) | Silicon (Si) | Iron (Fe) |
+| Valence | Mass 1       | Mass 2         | Mass 3         |
+| ------- | ------------ | -------------- | -------------- |
+| 1       | Hydrogen (H) | Lithium (Li)   | Sodium (Na)    |
+| 2       | Helium (He)  | Beryllium (Be) | Magnesium (Mg) |
+| 3       | Carbon (C)   | Nitrogen (N)   | Oxygen (O)     |
+| 4       | Neon (Ne)    | Silicon (Si)   | Iron (Fe)      |
 
 **Fusion rule:** when a placed Tile has a neighbouring Tile — **orthogonal or diagonal** (8-way adjacency) — whose Valence sum is **≤ 4**, the pair fuses. Both Tiles are consumed and replaced by the Element at **(sum valence, higher mass tier)** on the same Cell as the placed Tile. The chain repeats from the result while a matching neighbour exists.
 
