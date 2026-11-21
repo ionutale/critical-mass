@@ -83,7 +83,6 @@ test('keyboard opens the branch choices and commits a non-default path', async (
 	await expect(page.getByRole('button', { name: /cell 17, empty/i })).toBeVisible();
 });
 
-
 test.describe('touch on a 390×844 phone', () => {
 	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -224,7 +223,6 @@ for (const viewport of [
 		});
 	});
 }
-
 
 test('a fusion restarts the board-local particle burst', async ({ page }) => {
 	await seedRun(page, { grid: gridWith({ 6: 'N' }) });

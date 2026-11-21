@@ -268,9 +268,7 @@ describe('checkBands', () => {
 		const check = checkBands({ ...suite, card });
 
 		expect(check.ok).toBe(false);
-		expect(check.failures.some((failure) => failure.includes('card did not overload'))).toBe(
-			true
-		);
+		expect(check.failures.some((failure) => failure.includes('card did not overload'))).toBe(true);
 	});
 });
 

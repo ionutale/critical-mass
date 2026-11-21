@@ -287,8 +287,7 @@ function dominates(a: PlacementCandidate, b: PlacementCandidate): boolean {
 	const score = a.preview.scoreGain >= b.preview.scoreGain;
 	const heat = a.preview.heatAfterTurn <= b.preview.heatAfterTurn;
 	const strict =
-		a.preview.scoreGain > b.preview.scoreGain ||
-		a.preview.heatAfterTurn < b.preview.heatAfterTurn;
+		a.preview.scoreGain > b.preview.scoreGain || a.preview.heatAfterTurn < b.preview.heatAfterTurn;
 	return score && heat && strict;
 }
 
