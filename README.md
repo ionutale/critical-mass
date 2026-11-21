@@ -95,7 +95,7 @@ The full gate:
 pnpm check && pnpm lint && pnpm test && pnpm build && pnpm check:bundle && pnpm test:e2e
 ```
 
-The Playwright suite runs at 390×844 and covers cold start and first placement, a run through Overload, an upgrade draft, reload/resume, offline PWA startup, keyboard-only placement, touch drag, a reduced-motion run with no motion layer, axe audits on the title, run, draft, and end screens, and 44 px touch targets.
+The Playwright suite runs at 390×844 and covers cold start and first placement, a run through Overload, an upgrade draft, reload/resume, offline PWA startup, keyboard-only placement, touch drag, a reduced-motion run with no motion layer, axe audits on the title, run, draft, and end screens, and 44 px checks on the title, the unlocked run screen (all 25 board cells, Stabilize, Scrap, and every hand card), the upgrade draft options, and the end screen.
 
 ### Balance
 
