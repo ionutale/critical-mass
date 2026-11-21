@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
+	import { trapFocus } from '../../actions/trapFocus';
 	import { UNLOCKS } from '../../data/arcade/unlocks';
 	import { run, save } from '../../stores/arcade';
 	import { reducedMotion, transitionDuration } from '../../stores/motion';
@@ -24,6 +25,22 @@
 	const active = $derived($run?.status === 'active');
 	const unlocked = $derived($save.meta.unlocks.length);
 	const total = UNLOCKS.length;
+
+	/** A new run silently discarded the active one; ask first. */
+	let confirming = $state(false);
+
+	function requestNewRun(): void {
+		if (active) {
+			confirming = true;
+			return;
+		}
+		onPlay();
+	}
+
+	function confirmAbandon(): void {
+		confirming = false;
+		onPlay();
+	}
 </script>
 
 <main
@@ -33,7 +50,7 @@
 	<p class="kicker mono">REACTOR CONTROL // CORE ONLINE</p>
 	<h1>CRITICAL MASS</h1>
 	<p class="tagline">
-		Fuse the alpha ladder, chain the reactor, and climb the score before the heat cap melts the run.
+		Fuse light elements, chain the reactor, and climb the score before the heat cap melts the run.
 	</p>
 
 	{#if $run}
@@ -43,9 +60,9 @@
 	<div class="actions">
 		{#if active}
 			<button class="primary" type="button" onclick={onContinue}>Continue run</button>
-			<button type="button" onclick={onPlay}>New run</button>
+			<button type="button" onclick={requestNewRun}>New run</button>
 		{:else}
-			<button class="primary" type="button" onclick={onPlay}>New run</button>
+			<button class="primary" type="button" onclick={requestNewRun}>New run</button>
 		{/if}
 	</div>
 
@@ -76,6 +93,27 @@
 		</button>
 	</div>
 </main>
+
+{#if confirming}
+	<div class="backdrop">
+		<div
+			class="confirm"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Abandon run"
+			use:trapFocus={{ onEscape: () => (confirming = false) }}
+		>
+			<h2>Abandon this run?</h2>
+			<p>
+				Starting a new run discards seed {$run?.seed ?? '—'} and its board. Best scores and unlocks stay.
+			</p>
+			<div class="confirm-actions">
+				<button class="danger" type="button" onclick={confirmAbandon}>Abandon run</button>
+				<button type="button" onclick={() => (confirming = false)}>Keep playing</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.title {
@@ -182,5 +220,51 @@
 		font-weight: 400;
 		letter-spacing: 0.02em;
 		color: var(--muted);
+	}
+
+	.backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 30;
+		display: grid;
+		place-items: center;
+		padding: 22px;
+		background: rgba(3, 6, 12, 0.8);
+		backdrop-filter: blur(4px);
+	}
+
+	.confirm {
+		width: min(340px, 100%);
+		padding: 20px;
+		background: var(--panel);
+		border: 1px solid var(--danger);
+		border-radius: 14px;
+		box-shadow: 0 0 30px rgba(255, 91, 110, 0.18);
+	}
+
+	.confirm h2 {
+		font-size: 1.3rem;
+	}
+
+	.confirm p {
+		margin: 8px 0 16px;
+		font-size: 12px;
+		line-height: 1.5;
+		color: var(--muted);
+	}
+
+	.confirm-actions {
+		display: grid;
+		gap: 8px;
+	}
+
+	.confirm-actions button {
+		min-height: 44px;
+	}
+
+	.confirm-actions .danger {
+		color: var(--void);
+		background: var(--danger);
+		border-color: var(--danger);
 	}
 </style>

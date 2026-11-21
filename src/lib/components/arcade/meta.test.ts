@@ -197,6 +197,8 @@ describe('title screen', () => {
 		render(TitleScreen, { props });
 
 		await fireEvent.click(screen.getByRole('button', { name: /new run/i }));
+		// An active run must be abandoned deliberately.
+		await fireEvent.click(screen.getByRole('button', { name: /^abandon run$/i }));
 		expect(props.onPlay).toHaveBeenCalled();
 
 		await fireEvent.click(screen.getByRole('button', { name: /continue run/i }));
@@ -210,6 +212,26 @@ describe('title screen', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: /^settings/i }));
 		expect(props.onSettings).toHaveBeenCalled();
+	});
+
+	it('confirms before abandoning an active run', async () => {
+		const props = titleProps();
+		initGame({ run: createRun(42) });
+		render(TitleScreen, { props });
+
+		await fireEvent.click(screen.getByRole('button', { name: /new run/i }));
+
+		const dialog = screen.getByRole('dialog', { name: /abandon run/i });
+		expect(within(dialog).getByText(/seed 42/i)).toBeInTheDocument();
+		expect(props.onPlay).not.toHaveBeenCalled();
+
+		await fireEvent.click(within(dialog).getByRole('button', { name: /keep playing/i }));
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(props.onPlay).not.toHaveBeenCalled();
+
+		await fireEvent.click(screen.getByRole('button', { name: /new run/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^abandon run$/i }));
+		expect(props.onPlay).toHaveBeenCalledTimes(1);
 	});
 
 	it('offers New run when there is no active run', () => {
@@ -350,6 +372,7 @@ describe('settings screen', () => {
 describe('app switchover', () => {
 	it('mounts the arcade title, starts a run, and returns to the title', async () => {
 		window.localStorage.clear();
+		initGame({ run: null });
 		render(App);
 
 		expect(screen.getByRole('heading', { name: /critical mass/i })).toBeInTheDocument();
