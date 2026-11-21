@@ -290,14 +290,18 @@
 	border-radius: 6px;
 }
 
+/* Opaque: the origin cell has already committed its final tile when the layer
+   mounts, so a translucent survivor would paint the final result and each
+   intermediate result on top of each other. The survivor masks the committed
+   cell and carries the step-by-step chain itself. */
 .chain-ghost {
-	background: rgba(13, 20, 36, 0.82);
+	background: var(--panel);
 	border: 1px solid rgba(56, 225, 255, 0.45);
 	box-shadow: inset 0 0 12px rgba(56, 225, 255, 0.18);
 }
 
 .chain-ghost.surviving {
-	background: rgba(255, 179, 71, 0.08);
+	background: var(--panel);
 	border-color: var(--amber);
 	box-shadow:
 		0 0 18px rgba(255, 179, 71, 0.35),

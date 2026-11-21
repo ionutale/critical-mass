@@ -1,16 +1,20 @@
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { readFileSync } from 'node:fs';
+import { mount, unmount } from 'svelte';
 import { get } from 'svelte/store';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { previewPlacement } from '../../game/arcade/fusion';
 import { createRun } from '../../game/arcade/turn';
 import type { RunState } from '../../game/arcade/turn';
 import { initGame, place, save } from '../../stores/arcade';
 import type { ElementSymbol } from '../../types';
 import Board from './Board.svelte';
+import ChainPlayback from './ChainPlayback.svelte';
 import Hand from './Hand.svelte';
 import HeatBar from './HeatBar.svelte';
 import RunScreen from './RunScreen.svelte';
 import ScoreDisplay from './ScoreDisplay.svelte';
+import type { PlaybackModel } from './choreography';
 
 const CENTER = 12;
 const CHAIN_TILES: readonly (readonly [number, ElementSymbol])[] = [
@@ -64,6 +68,66 @@ async function dragCardToCell(card: HTMLElement, cell: HTMLElement): Promise<voi
 	await fireEvent.pointerDown(card, DRAG_START);
 	await fireEvent.pointerMove(cell, DRAG_OVER);
 	await fireEvent.pointerUp(cell, DRAG_OVER);
+}
+
+/**
+ * jsdom has no Web Animations API, and the choreography only mounts when it
+ * exists. Stub it for the DOM-marker tests; return a restore for the original.
+ */
+function stubAnimations(): () => void {
+	const animate = vi.fn(
+		() =>
+			({
+				cancel: vi.fn(),
+				addEventListener: vi.fn()
+			}) as unknown as Animation
+	);
+	const original = Object.getOwnPropertyDescriptor(Element.prototype, 'animate');
+	Object.defineProperty(Element.prototype, 'animate', {
+		configurable: true,
+		writable: true,
+		value: animate
+	});
+	return () => {
+		if (original) Object.defineProperty(Element.prototype, 'animate', original);
+		else Reflect.deleteProperty(Element.prototype, 'animate');
+	};
+}
+
+/** The playback model a committed centre placement would capture. */
+function centrePlayback(run: RunState): PlaybackModel {
+	const preview = previewPlacement(run, 0, CENTER)!;
+	return {
+		id: 99,
+		originCell: CENTER,
+		card: 'H',
+		steps: preview.steps,
+		ghosts: [
+			...preview.steps.map((step, index) => ({
+				cell: step.cell,
+				step: index,
+				symbol: run.grid[step.cell] ?? step.b,
+				box: null,
+				surviving: false
+			})),
+			{
+				cell: CENTER,
+				step: 'result' as const,
+				symbol: preview.grid[CENTER] ?? 'Ne',
+				box: null,
+				surviving: true
+			}
+		],
+		flight: null,
+		discard: null,
+		score: null,
+		scoreFrom: run.score,
+		scoreTo: run.score + preview.scoreGain,
+		heatFrom: run.heat,
+		heatTo: preview.heatAfterTurn,
+		keptHand: run.hand.length - 1,
+		overload: preview.overloadAfterTurn
+	};
 }
 
 beforeEach(() => {
@@ -781,6 +845,17 @@ describe('run screen branch choices', () => {
 });
 
 describe('run screen choreography', () => {
+	let restoreAnimations: (() => void) | null = null;
+
+	beforeEach(() => {
+		restoreAnimations = stubAnimations();
+	});
+
+	afterEach(() => {
+		restoreAnimations?.();
+		restoreAnimations = null;
+	});
+
 	/** Confirm the tapped card at the centre cell through the modal preview. */
 	async function confirmCentrePlacement(): Promise<void> {
 		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
@@ -825,6 +900,43 @@ describe('run screen choreography', () => {
 
 		// The flown card is drawn as a proxy at the hand before the chain resolves.
 		expect(within(layer).getByTestId('flight-ghost')).toHaveTextContent('H');
+	});
+
+	it('paints the placed card before the first frame, never the final fusion', () => {
+		const playback = centrePlayback(arcadeRun());
+		expect(playback.ghosts.at(-1)?.symbol).toBe('Ne');
+
+		const target = document.createElement('div');
+		document.body.appendChild(target);
+		const component = mount(ChainPlayback, {
+			target,
+			props: {
+				playback,
+				refs: { stage: null, hand: null, heat: null, score: null, discard: null },
+				reducedMotion: true,
+				onDone: vi.fn()
+			}
+		});
+
+		try {
+			// `mount` returns before onMount flushes, so this is the first frame:
+			// the survivor must not have fallen back to the committed result.
+			const surviving = target.querySelector('.chain-ghost.surviving');
+			expect(surviving).toHaveTextContent('H');
+			expect(surviving).not.toHaveTextContent('Ne');
+		} finally {
+			unmount(component);
+			target.remove();
+		}
+	});
+
+	it('masks the committed origin cell under an opaque survivor', () => {
+		const css = readFileSync('src/lib/styles/neon.css', 'utf8');
+		const survivor = css.match(/\.chain-ghost\.surviving\s*\{([^}]*)\}/)?.[1] ?? '';
+		const background = survivor.match(/background:\s*([^;]+);/)?.[1] ?? '';
+
+		expect(background.trim()).toBe('var(--panel)');
+		expect(background).not.toContain('rgba(');
 	});
 
 	it('still flies the placed card when nothing fuses', async () => {
@@ -873,6 +985,26 @@ describe('run screen choreography', () => {
 			'aria-valuenow',
 			String(expected.heatAfterTurn)
 		);
+	});
+
+	it('mounts no layer and commits instantly without the Web Animations API', async () => {
+		Reflect.deleteProperty(Element.prototype, 'animate');
+		const before = arcadeRun();
+		const expected = previewPlacement(before, 0, CENTER)!;
+		initGame({ run: before });
+		render(RunScreen);
+
+		await confirmCentrePlacement();
+
+		expect(Element.prototype.animate).toBeUndefined();
+		expect(screen.queryByTestId('chain-playback')).not.toBeInTheDocument();
+		expect(document.querySelector('[data-motion]')).toBeNull();
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Neon');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(expected.heatAfterTurn)
+		);
+		expect(screen.getByTestId('score-value')).toHaveTextContent(String(expected.scoreGain));
 	});
 
 	it('cancels the previous playback when a new placement lands', async () => {

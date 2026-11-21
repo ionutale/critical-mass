@@ -1,7 +1,16 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import type { ElementSymbol } from '../../types';
-	import { dealIn, flight, mergeGhosts, pulse, shake, tweenBar, tweenNumber } from './choreography';
+	import {
+		animationsAvailable,
+		dealIn,
+		flight,
+		mergeGhosts,
+		pulse,
+		shake,
+		tweenBar,
+		tweenNumber
+	} from './choreography';
 	import type { ChoreographyRefs, MotionHandle, PlaybackModel } from './choreography';
 
 	let {
@@ -31,13 +40,18 @@
 	const gain = $derived(playback.scoreTo - playback.scoreFrom);
 
 	let layer = $state<HTMLElement | null>(null);
-	/** The surviving cell steps through each chain result, then settles. */
-	let resultSymbol = $state<ElementSymbol | null>(null);
+	/**
+	 * The surviving cell steps through each chain result, then settles. It
+	 * starts as the placed card in the very first render: falling back to the
+	 * committed result here would paint the final fusion for one frame before
+	 * `onMount`.
+	 */
+	let resultSymbol = $state<ElementSymbol>(untrack(() => playback.card));
 
 	onMount(() => {
 		resultSymbol = playback.card;
 
-		if (reducedMotion) {
+		if (reducedMotion || !animationsAvailable()) {
 			resultSymbol = playback.steps[playback.steps.length - 1]?.result ?? playback.card;
 			onDone();
 			return;
@@ -199,9 +213,7 @@
 			style:width={`${ghost.box?.width ?? 0}px`}
 			style:height={`${ghost.box?.height ?? 0}px`}
 		>
-			<span class="symbol" aria-hidden="true"
-				>{ghost.surviving ? (resultSymbol ?? ghost.symbol) : ghost.symbol}</span
-			>
+			<span class="symbol" aria-hidden="true">{ghost.surviving ? resultSymbol : ghost.symbol}</span>
 		</span>
 	{/each}
 

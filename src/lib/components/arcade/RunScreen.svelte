@@ -9,7 +9,7 @@
 	import { reducedMotion, transitionDuration } from '../../stores/motion';
 	import Board from './Board.svelte';
 	import ChainPlayback from './ChainPlayback.svelte';
-	import { capturePlayback, boxOf, flyProxy } from './choreography';
+	import { animationsAvailable, capturePlayback, boxOf, flyProxy } from './choreography';
 	import type { PlaybackModel } from './choreography';
 	import Hand from './Hand.svelte';
 	import HeatBar from './HeatBar.svelte';
@@ -95,6 +95,11 @@
 		clearPlacement();
 	}
 
+	/** Motion runs only when the user allows it and the browser can animate. */
+	function motionEnabled(): boolean {
+		return !$reducedMotion && animationsAvailable();
+	}
+
 	/** Discard the Stabilize card with a flight into the discard counter. */
 	function commitStabilize(handIndex: number): void {
 		const state = $run;
@@ -102,7 +107,7 @@
 		const card = state.hand[handIndex];
 		if (!card) return;
 
-		if (!$reducedMotion) {
+		if (motionEnabled()) {
 			flyProxy({
 				symbol: card,
 				from: boxOf(handEl?.querySelectorAll<HTMLElement>('.cards > button')[handIndex]),
@@ -180,9 +185,8 @@
 		// Capture before the store commit: `place` resolves synchronously, so the
 		// consumed tiles and the hand card are already gone when playback mounts.
 		// A fresh placement replaces any chain still playing.
-		const snapshot = $reducedMotion
-			? null
-			: capturePlayback({
+		const snapshot = motionEnabled()
+			? capturePlayback({
 					id: ++playbackId,
 					stage: stageEl,
 					hand: handEl,
@@ -201,7 +205,8 @@
 					heatFrom: state.heat,
 					heatTo: result.heatAfterTurn,
 					overload: result.overloadAfterTurn
-				});
+				})
+			: null;
 
 		place(index, cell, committedChoices);
 		playback = snapshot;
