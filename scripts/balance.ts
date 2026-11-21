@@ -1,5 +1,6 @@
 import {
 	DEFAULT_BANDS,
+	cardPlay,
 	casualPlay,
 	checkBands,
 	plannerPlay,
@@ -43,6 +44,7 @@ export function runBalance(
 
 	const results: BalanceResults = {
 		planner: play(plannerPlay),
+		card: play(cardPlay),
 		casual: play(casualPlay),
 		stabilizeOnly: play(stabilizeOnlyPlay)
 	};

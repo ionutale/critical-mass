@@ -53,6 +53,9 @@ jobs:
       - name: Bundle budget
         run: pnpm check:bundle
 
+      - name: Balance bands
+        run: pnpm balance --check
+
       - name: Playwright suite
         run: pnpm test:e2e
 

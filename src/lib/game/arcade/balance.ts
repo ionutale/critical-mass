@@ -9,11 +9,14 @@ import type { RunState, RunStatus } from './turn';
 /**
  * Deterministic balance harness for the arcade loop.
  *
- * Two reference policies play the same engine the UI plays:
+ * Four reference policies play the same engine the UI plays:
  * - `casualPlay` is a one-step greedy player: every placement is judged only by
  *   its own Preview (default branch), and Stabilize happens once Heat is high.
  * - `plannerPlay` searches placement branches, weighs Heat against score and
  *   board space, manages upgrades, and cools before a play would leave it hot.
+ * - `cardPlay` uses the planner's movement but drafts card stock, giving the
+ *   harness a second, card-focused build archetype to measure.
+ * - `stabilizeOnlyPlay` is the floor control: it never places.
  *
  * The policies are pure and bounded: they only read a `RunState` and return the
  * next committed action, so the same seed always produces the same run.
@@ -27,13 +30,22 @@ export interface Result {
 	turns: number;
 	bestChain: number;
 	upgrades: string[];
+	/** Mean non-dominated placements available on each measured turn. */
+	viablePlays: number;
+	/** Build shape from the drafted upgrades: card stock, modifiers, or both. */
+	archetype: Archetype;
 	stalled: boolean;
 }
 
-/** The three reference policies a band check reads. */
+/** A run's build shape, read from its drafted upgrades. */
+export type Archetype = 'card' | 'modifier' | 'mixed' | 'none';
+
+/** The reference policies a band check reads. */
 export interface BalanceResults {
 	casual: Result[];
 	planner: Result[];
+	/** The same planner movement, but it drafts card stock over modifiers. */
+	card: Result[];
 	stabilizeOnly: Result[];
 }
 
@@ -51,6 +63,10 @@ export interface BalanceBands {
 	minUpgradePaths: number;
 	/** How far planner median score must exceed casual median score. */
 	minScoreRatio: number;
+	/** Median (per-run average) of non-dominated placements on measured turns. */
+	minViablePlays: number;
+	/** Distinct build archetypes the planner and card policies must reach. */
+	minArchetypes: number;
 	/** Stabilize-only must overload by this turn from the rising floor alone. */
 	maxStabilizeTurns: number;
 }
@@ -63,6 +79,8 @@ export const DEFAULT_BANDS: BalanceBands = {
 	maxStalls: 0,
 	minUpgradePaths: 2,
 	minScoreRatio: 1.25,
+	minViablePlays: 2,
+	minArchetypes: 2,
 	maxStabilizeTurns: 40
 };
 
@@ -260,6 +278,52 @@ function collectPlacements(run: RunState, deep: boolean): PlacementCandidate[] {
 	return candidates;
 }
 
+/**
+ * Strict Pareto dominance over a placement's visible outcome: A dominates B
+ * when it scores at least as much and leaves at least as little Heat, and is
+ * better on one of them. A dominated placement is never a real alternative.
+ */
+function dominates(a: PlacementCandidate, b: PlacementCandidate): boolean {
+	const score = a.preview.scoreGain >= b.preview.scoreGain;
+	const heat = a.preview.heatAfterTurn <= b.preview.heatAfterTurn;
+	const strict =
+		a.preview.scoreGain > b.preview.scoreGain ||
+		a.preview.heatAfterTurn < b.preview.heatAfterTurn;
+	return score && heat && strict;
+}
+
+/**
+ * How many genuinely different plays a turn offers: distinct score/Heat
+ * outcomes that no other outcome beats on both. Counting outcomes rather than
+ * raw cells keeps a mostly empty board from inflating the number with
+ * interchangeable no-fusion drops.
+ */
+export function countViablePlays(run: RunState, deep = true): number {
+	const candidates = collectPlacements(run, deep);
+	const outcomes = new Map<string, PlacementCandidate>();
+
+	for (const candidate of candidates) {
+		const key = `${candidate.preview.scoreGain}:${candidate.preview.heatAfterTurn}`;
+		if (!outcomes.has(key)) outcomes.set(key, candidate);
+	}
+
+	const distinct = [...outcomes.values()];
+	return distinct.filter(
+		(candidate) => !distinct.some((other) => other !== candidate && dominates(other, candidate))
+	).length;
+}
+
+/** The build shape a run's drafted upgrades add up to. */
+export function archetypeOf(upgrades: readonly string[]): Archetype {
+	const cards = upgrades.filter((id) => id.startsWith('add-')).length;
+	const modifiers = upgrades.length - cards;
+
+	if (cards === 0 && modifiers === 0) return 'none';
+	if (cards > modifiers) return 'card';
+	if (modifiers > cards) return 'modifier';
+	return 'mixed';
+}
+
 /** Planner value: score and space, discounted by the Heat the play leaves behind. */
 function plannerValue(run: RunState, preview: PlacementPreview): number {
 	const pressure = Math.max(0, preview.heatAfterTurn / run.heatCap - PLANNER_COMFORT);
@@ -289,30 +353,42 @@ function bestBy<T>(items: readonly T[], value: (item: T) => number): T | undefin
 	return best;
 }
 
-/** Choose the upgrade that most improves the planner's current bind. */
-function choosePlannerUpgrade(run: RunState): RunState {
+/** Card-first priorities for the card archetype: bodies over rules. */
+const CARD_UPGRADE_PRIORITY: Readonly<Record<string, number>> = {
+	'add-c': 10,
+	'add-na': 9,
+	'add-o': 9,
+	'add-h-2': 8,
+	'add-he-2': 7,
+	'add-si': 7,
+	'add-n': 6,
+	'add-mg': 6,
+	'add-li': 6,
+	'add-be': 6,
+	coolant: 5,
+	efficient: 4,
+	'heat-sink': 4,
+	salvage: 3,
+	'deep-hand': 3,
+	'chain-reaction': 2,
+	'rarity-bonus': 2,
+	echo: 1
+};
+
+/** Draft the highest-priority option, breaking ties by pool order. */
+function chooseByPriority(
+	run: RunState,
+	priority: Readonly<Record<string, number>>,
+	bonus: (id: string) => number = () => 0
+): RunState {
 	const options = generateDraft(run);
-	const heatPressure = run.heat / run.heatCap;
-	const crowded = isEmpty(run.grid) <= PLANNER_CROWDED_CELLS;
-
-	const value = (id: string, index: number): number => {
-		let score = UPGRADE_PRIORITY[id] ?? 1;
-
-		if (heatPressure >= 0.6 && (id === 'coolant' || id === 'efficient' || id === 'heat-sink')) {
-			score += 3;
-		}
-		if (crowded && id === 'salvage') score += 3;
-		if (run.turn >= 24 && (id === 'chain-reaction' || id === 'rarity-bonus')) score += 3;
-		// Earlier options win ties, keeping the choice deterministic.
-		return score * 100 - index;
-	};
 
 	let bestIndex = 0;
 	let bestValue = Number.NEGATIVE_INFINITY;
 	for (let index = 0; index < options.length; index++) {
 		const id = options[index];
 		if (!id) continue;
-		const score = value(id, index);
+		const score = ((priority[id] ?? 1) + bonus(id)) * 100 - index;
 		if (score > bestValue) {
 			bestIndex = index;
 			bestValue = score;
@@ -320,6 +396,27 @@ function choosePlannerUpgrade(run: RunState): RunState {
 	}
 
 	return chooseUpgrade(run, bestIndex);
+}
+
+/** A card-focused drafter: same movement, but it builds a wider deck. */
+function chooseCardUpgrade(run: RunState): RunState {
+	return chooseByPriority(run, CARD_UPGRADE_PRIORITY);
+}
+
+/** Choose the upgrade that most improves the planner's current bind. */
+function choosePlannerUpgrade(run: RunState): RunState {
+	const heatPressure = run.heat / run.heatCap;
+	const crowded = isEmpty(run.grid) <= PLANNER_CROWDED_CELLS;
+
+	return chooseByPriority(run, UPGRADE_PRIORITY, (id) => {
+		let bonus = 0;
+		if (heatPressure >= 0.6 && (id === 'coolant' || id === 'efficient' || id === 'heat-sink')) {
+			bonus += 3;
+		}
+		if (crowded && id === 'salvage') bonus += 3;
+		if (run.turn >= 24 && (id === 'chain-reaction' || id === 'rarity-bonus')) bonus += 3;
+		return bonus;
+	});
 }
 
 /** Scrap a terminal tile when the board is crowded; otherwise the worst tile. */
@@ -412,7 +509,15 @@ function casualStep(run: RunState): RunState {
 }
 
 function plannerStep(run: RunState): RunState {
-	if (run.pendingDrafts > 0) return choosePlannerUpgrade(run);
+	return plannerStepWith(run, choosePlannerUpgrade);
+}
+
+function cardStep(run: RunState): RunState {
+	return plannerStepWith(run, chooseCardUpgrade);
+}
+
+function plannerStepWith(run: RunState, draft: (run: RunState) => RunState): RunState {
+	if (run.pendingDrafts > 0) return draft(run);
 
 	// Space is a resource: clear a clogging terminal before it costs a placement.
 	if (run.scrapsUsed < scrapLimit(run) && crowdedTerminal(run)) {
@@ -456,11 +561,26 @@ function play(
 	let run = createRun(seed, unlocked);
 	let actions = 0;
 	let stalled = false;
+	let viableTotal = 0;
+	let viableTurns = 0;
+	let measuredTurn = -1;
 
 	while (run.status === 'active') {
 		if (actions >= ACTION_CAP) {
 			stalled = true;
 			break;
+		}
+
+		// Measure once per state that can place, before the policy acts. The
+		// default branch keeps the count about distinct card/cell plays rather
+		// than every branch permutation the planner may explore.
+		if (run.pendingDrafts === 0 && run.hand.length > 0 && run.turn !== measuredTurn) {
+			const viable = countViablePlays(run, false);
+			if (viable > 0) {
+				viableTotal += viable;
+				viableTurns += 1;
+				measuredTurn = run.turn;
+			}
 		}
 
 		const next = step(run);
@@ -481,6 +601,8 @@ function play(
 		turns: run.turn,
 		bestChain: run.bestChain,
 		upgrades: [...run.upgrades],
+		viablePlays: viableTurns > 0 ? viableTotal / viableTurns : 0,
+		archetype: archetypeOf(run.upgrades),
 		stalled
 	};
 }
@@ -493,6 +615,11 @@ export function casualPlay(seed: number, unlocked: readonly string[] = []): Resu
 /** A branch-searching, Heat-aware, space-aware reference. */
 export function plannerPlay(seed: number, unlocked: readonly string[] = []): Result {
 	return play(seed, unlocked, plannerStep);
+}
+
+/** The planner's movement with a card-focused draft: a second viable build. */
+export function cardPlay(seed: number, unlocked: readonly string[] = []): Result {
+	return play(seed, unlocked, cardStep);
 }
 
 /** The floor-only control: always Stabilize, never place. */
@@ -535,20 +662,33 @@ function statusCounts(results: readonly Result[]): string {
 	return `${overloaded}/${results.length}`;
 }
 
+function mean(values: readonly number[]): number {
+	if (values.length === 0) return 0;
+	return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** Archetypes reached by a set of runs, in stable reading order. */
+function archetypes(results: readonly Result[]): Archetype[] {
+	const order: Archetype[] = ['card', 'modifier', 'mixed'];
+	const present = new Set(results.map((result) => result.archetype));
+	return order.filter((kind) => present.has(kind));
+}
+
 /**
- * A compact distribution report: turns, score, best chain, stalls, and the
- * distinct upgrade paths each policy reached.
+ * A compact distribution report: turns, score, best chain, stalls, upgrade
+ * paths, viable plays, and the build archetypes each policy reached.
  */
 export function report(results: BalanceResults, bands: BalanceBands = DEFAULT_BANDS): string {
 	const policies: readonly (readonly [string, Result[]])[] = [
 		['planner', results.planner],
+		['card', results.card],
 		['casual', results.casual],
 		['stabilize-only', results.stabilizeOnly]
 	];
 
 	const lines = [
 		`Balance report — ${results.planner.length} seeds`,
-		'policy          turns(min/med/max)  score(min/med/max)  chain(max)  stalls  upgrades  overloads',
+		'policy          turns(min/med/max)  score(min/med/max)  chain(max)  stalls  sets  viable  build            overloads',
 		''
 	];
 
@@ -558,18 +698,24 @@ export function report(results: BalanceResults, bands: BalanceBands = DEFAULT_BA
 		const chain = Math.max(0, ...list.map((result) => result.bestChain));
 		const stalls = list.filter((result) => result.stalled).length;
 		const upgrades = upgradePaths(list);
+		const viable = mean(list.map((result) => result.viablePlays)).toFixed(1);
+		const builds = archetypes(list).join('+') || '—';
 
 		lines.push(
 			`${label.padEnd(15)} ${turns.padEnd(20)} ${scores.padEnd(19)} ${String(chain).padEnd(11)} ` +
-				`${String(stalls).padEnd(7)} ${String(upgrades).padEnd(9)} ${statusCounts(list)}`
+				`${String(stalls).padEnd(7)} ${String(upgrades).padEnd(6)} ${viable.padEnd(7)} ${builds.padEnd(16)} ${statusCounts(list)}`
 		);
 	}
 
 	const check = checkBands(results, bands);
 	const naturalCap = Math.max(0, ...results.stabilizeOnly.map((result) => result.turns));
+	const plannerViable = mean(results.planner.map((result) => result.viablePlays));
+	const reached = archetypes([...results.planner, ...results.card]);
 	lines.push('');
 	lines.push(`natural cap (stabilize-only max turns): ${naturalCap}`);
 	lines.push(`upgrade paths across planner seeds: ${upgradePaths(results.planner)}`);
+	lines.push(`viable plays per measured turn (planner mean): ${plannerViable.toFixed(2)}`);
+	lines.push(`build archetypes (planner + card): ${reached.join(', ') || '—'}`);
 	lines.push(check.ok ? 'Bands: PASS' : `Bands: FAIL — ${check.failures.join('; ')}`);
 
 	return lines.join('\n');
@@ -630,6 +776,35 @@ export function checkBands(
 				`upgrade paths ${paths} below minimum ${bands.minUpgradePaths} across planner seeds`
 			);
 		}
+
+		const viable = median(results.planner.map((result) => result.viablePlays));
+		if (viable < bands.minViablePlays) {
+			failures.push(
+				`viable plays median ${viable.toFixed(2)} below minimum ${bands.minViablePlays} per turn`
+			);
+		}
+	}
+
+	if (results.card.length === 0) {
+		failures.push('card produced no runs');
+	} else {
+		const cardStalls = results.card.filter((result) => result.stalled).length;
+		if (cardStalls > bands.maxStalls) {
+			failures.push(`card stalls: ${cardStalls} run(s) hit the action cap`);
+		}
+
+		const unfinished = results.card.filter((result) => result.status !== 'overload').length;
+		if (unfinished > 0) {
+			failures.push(`card did not overload in ${unfinished} run(s)`);
+		}
+	}
+
+	const reached = archetypes([...results.planner, ...results.card]);
+	const measured = results.planner.length + results.card.length;
+	if (measured >= bands.minArchetypes && reached.length < bands.minArchetypes) {
+		failures.push(
+			`build archetypes ${reached.join(', ') || '—'} below minimum ${bands.minArchetypes}`
+		);
 	}
 
 	if (results.casual.length === 0) {

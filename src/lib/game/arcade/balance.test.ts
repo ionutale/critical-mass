@@ -3,9 +3,13 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { runBalance } from '../../../../scripts/balance';
+import { createRun } from './turn';
 import {
-	checkBands,
+	archetypeOf,
+	cardPlay,
 	casualPlay,
+	checkBands,
+	countViablePlays,
 	DEFAULT_BANDS,
 	plannerPlay,
 	report,
@@ -29,6 +33,7 @@ function resultsFor(run: (seed: number) => Result): Result[] {
 function healthySuite(): BalanceResults {
 	return {
 		planner: resultsFor(plannerPlay),
+		card: resultsFor(cardPlay),
 		casual: resultsFor(casualPlay),
 		stabilizeOnly: resultsFor(stabilizeOnlyPlay)
 	};
@@ -89,6 +94,23 @@ describe('planner policy', () => {
 		expect(paths.size).toBeGreaterThanOrEqual(DEFAULT_BANDS.minUpgradePaths);
 	});
 
+	it('offers at least two viable placements on typical turns', () => {
+		const results = resultsFor(plannerPlay);
+		const medianViable = median(results.map((result) => result.viablePlays));
+
+		for (const result of results) {
+			expect(result.viablePlays, `seed ${result.seed}`).toBeGreaterThan(0);
+		}
+		expect(medianViable).toBeGreaterThanOrEqual(DEFAULT_BANDS.minViablePlays);
+	});
+
+	it('counts only non-dominated placements for a turn', () => {
+		const count = countViablePlays(createRun(7));
+
+		expect(count).toBeGreaterThan(0);
+		expect(Number.isInteger(count)).toBe(true);
+	});
+
 	it('scores meaningfully above casual play', () => {
 		const plannerScores = resultsFor(plannerPlay).map((result) => result.score);
 		const casualScores = resultsFor(casualPlay).map((result) => result.score);
@@ -122,6 +144,31 @@ describe('stabilize-only policy', () => {
 	});
 });
 
+describe('card policy', () => {
+	it('terminates and overloads on every seed', () => {
+		for (const seed of SEEDS) {
+			const result = cardPlay(seed);
+
+			expect(result.status).toBe('overload');
+			expect(result.stalled).toBe(false);
+			expect(result.upgrades.length).toBeGreaterThan(0);
+		}
+	});
+
+	it('reaches a card-focused build', () => {
+		const results = resultsFor(cardPlay);
+
+		expect(results.some((result) => result.archetype === 'card')).toBe(true);
+	});
+
+	it('classifies builds by card and modifier stock', () => {
+		expect(archetypeOf([])).toBe('none');
+		expect(archetypeOf(['add-c', 'add-h-2'])).toBe('card');
+		expect(archetypeOf(['coolant', 'efficient', 'salvage'])).toBe('modifier');
+		expect(archetypeOf(['add-c', 'coolant'])).toBe('mixed');
+	});
+});
+
 describe('checkBands', () => {
 	it('passes a healthy suite', () => {
 		const check = checkBands(healthySuite());
@@ -139,6 +186,8 @@ describe('checkBands', () => {
 			turns: 2,
 			bestChain: 0,
 			upgrades: [],
+			viablePlays: 3,
+			archetype: 'none',
 			stalled: false
 		};
 		const check = checkBands({ ...suite, planner: [shortRun] });
@@ -156,6 +205,8 @@ describe('checkBands', () => {
 			turns: 24,
 			bestChain: 0,
 			upgrades: [],
+			viablePlays: 3,
+			archetype: 'none',
 			stalled: true
 		};
 		const check = checkBands({ ...suite, planner: [stalled] });
@@ -188,6 +239,36 @@ describe('checkBands', () => {
 
 		expect(check.ok).toBe(false);
 		expect(check.failures.some((failure) => failure.includes('casual median score is 0'))).toBe(
+			true
+		);
+	});
+
+	it('fails when typical turns offer too few viable plays', () => {
+		const suite = healthySuite();
+		const planner = suite.planner.map((result) => ({ ...result, viablePlays: 1 }));
+		const check = checkBands({ ...suite, planner });
+
+		expect(check.ok).toBe(false);
+		expect(check.failures.some((failure) => failure.includes('viable plays'))).toBe(true);
+	});
+
+	it('fails when only one build archetype is viable', () => {
+		const suite = healthySuite();
+		const planner = suite.planner.map((result) => ({ ...result, archetype: 'modifier' as const }));
+		const card = suite.card.map((result) => ({ ...result, archetype: 'modifier' as const }));
+		const check = checkBands({ ...suite, planner, card });
+
+		expect(check.ok).toBe(false);
+		expect(check.failures.some((failure) => failure.includes('build archetypes'))).toBe(true);
+	});
+
+	it('fails when the card policy does not overload', () => {
+		const suite = healthySuite();
+		const card = [{ ...suite.card[0]!, status: 'active' as const, turns: 40 }];
+		const check = checkBands({ ...suite, card });
+
+		expect(check.ok).toBe(false);
+		expect(check.failures.some((failure) => failure.includes('card did not overload'))).toBe(
 			true
 		);
 	});
@@ -258,14 +339,17 @@ describe('balance CLI', () => {
 });
 
 describe('report', () => {
-	it('summarises turns, score, chains, stalls, and upgrade paths', () => {
+	it('summarises turns, score, chains, stalls, upgrades, viability, and builds', () => {
 		const text = report(healthySuite());
 
 		expect(text).toContain('planner');
+		expect(text).toContain('card');
 		expect(text).toContain('turns');
 		expect(text).toContain('score');
 		expect(text).toContain('stalls');
 		expect(text).toContain('natural cap');
 		expect(text).toContain('upgrade paths');
+		expect(text).toContain('viable plays');
+		expect(text).toContain('build archetypes');
 	});
 });

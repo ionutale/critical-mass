@@ -92,7 +92,7 @@ pnpm preview       # serve the production build
 The full gate:
 
 ```bash
-pnpm check && pnpm lint && pnpm test && pnpm build && pnpm check:bundle && pnpm test:e2e
+pnpm check && pnpm lint && pnpm test && pnpm build && pnpm check:bundle && pnpm test:e2e && pnpm balance --check
 ```
 
 The Playwright suite runs at 390×844 and covers cold start and first placement, a run through Overload, an upgrade draft, reload/resume, offline PWA startup, keyboard-only placement, touch drag, a reduced-motion run with no motion layer, axe audits on the title, run, draft, and end screens, and 44 px checks on the title, the unlocked run screen (all 25 board cells, Stabilize, Scrap, and every hand card), the upgrade draft options, and the end screen.
@@ -104,7 +104,7 @@ pnpm balance            # report
 pnpm balance --check    # exit 1 when a band misses
 ```
 
-The harness plays 20 seeds with three reference policies: a one-step greedy `casual` player, a branch-searching `planner`, and a `stabilize-only` floor control. `--check` enforces the design bands: planner median **20–30 turns** (hard window 15–40), no stalls, at least two distinct upgrade paths, planner median score above 1.25× casual, and a stabilize-only control that overloads by turn 40. Balance changes must keep every band green.
+The harness plays 20 seeds with four reference policies: a one-step greedy `casual` player, a branch-searching `planner`, a `card` player that uses the planner's movement but drafts card stock, and a `stabilize-only` floor control. `--check` enforces the design bands: planner median **20–30 turns** (hard window 15–40), no stalls, at least two distinct upgrade sets, planner median score above 1.25× casual, a **median of at least two viable score/Heat outcomes per measured turn** for the planner, at least two build archetypes across the planner and card policies, and a stabilize-only control that overloads by turn 40. A build archetype is read from the drafted upgrades: card stock, modifiers, or a mix. Balance changes must keep every band green.
 
 ## Content
 

@@ -243,7 +243,10 @@ describe('upgrade effects', () => {
 	it('coolant still respects the rising heat floor', () => {
 		const base = chainRun({ turn: 10, heat: 35, upgrades: ['coolant'] });
 
-		expect(stabilize(base, 0).heat).toBe(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
+		// Heat is already below the floor, so cooling cannot lower it further and
+		// must not raise it to the floor either: only passive Heat applies.
+		expect(stabilize(base, 0).heat).toBe(35 + PASSIVE_HEAT);
+		expect(stabilize(base, 0).heat).toBeLessThan(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
 	});
 
 	it('efficient reduces every fusion by 1 Heat, never below 1', () => {
