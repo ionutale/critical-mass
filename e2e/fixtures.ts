@@ -220,3 +220,73 @@ export async function touchSwipe(
 		{ x, y, dy: deltaY }
 	);
 }
+
+/**
+ * Count `pointercancel` events from now on. A real touch drag must complete
+ * without the browser claiming the gesture for a native pan.
+ */
+export async function watchPointerCancels(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		const state = window as unknown as { __pointerCancels?: number };
+		state.__pointerCancels = 0;
+		window.addEventListener(
+			'pointercancel',
+			() => {
+				state.__pointerCancels = (state.__pointerCancels ?? 0) + 1;
+			},
+			true
+		);
+	});
+}
+
+/** How many pointercancel events arrived since `watchPointerCancels`. */
+export function pointerCancels(page: Page): Promise<number> {
+	return page.evaluate(() => {
+		const state = window as unknown as { __pointerCancels?: number };
+		return state.__pointerCancels ?? 0;
+	});
+}
+
+/**
+ * Drive a real touch drag through CDP `Input.dispatchTouchEvent`. Unlike the
+ * synthetic `touchDrag` above, this is a genuine browser gesture: Chrome
+ * resolves `touch-action` at touchstart and will fire `pointercancel` if the
+ * page claims the pan. The gesture moves vertically from the card to the cell.
+ */
+export async function realTouchDrag(
+	page: Page,
+	card: import('@playwright/test').Locator,
+	cell: import('@playwright/test').Locator
+): Promise<void> {
+	await card.scrollIntoViewIfNeeded();
+	const cardBox = await card.boundingBox();
+	const cellBox = await cell.boundingBox();
+	if (!cardBox || !cellBox) throw new Error('drag endpoints must be visible');
+
+	const start = { x: cardBox.x + cardBox.width / 2, y: cardBox.y + cardBox.height / 2 };
+	const end = { x: cellBox.x + cellBox.width / 2, y: cellBox.y + cellBox.height / 2 };
+	const mid = { x: start.x, y: start.y + (end.y - start.y) * 0.5 };
+
+	const session = await page.context().newCDPSession(page);
+	try {
+		await session.send('Input.dispatchTouchEvent', {
+			type: 'touchStart',
+			touchPoints: [{ ...start, id: 1 }]
+		});
+		await page.waitForTimeout(30);
+		await session.send('Input.dispatchTouchEvent', {
+			type: 'touchMove',
+			touchPoints: [{ ...mid, id: 1 }]
+		});
+		await page.waitForTimeout(30);
+		await session.send('Input.dispatchTouchEvent', {
+			type: 'touchMove',
+			touchPoints: [{ ...end, id: 1 }]
+		});
+		await page.waitForTimeout(30);
+		await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	} finally {
+		await session.detach();
+	}
+}
+

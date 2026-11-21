@@ -89,6 +89,9 @@
 		background: var(--panel-2);
 		border: 1px solid rgba(56, 225, 255, 0.35);
 		border-radius: 7px;
+		/* The browser resolves `touch-action` when a finger lands, so it must be
+		   static: allow the hand's horizontal scroll, claim vertical drags. */
+		touch-action: pan-x;
 		transition:
 			transform 140ms ease,
 			border-color 120ms ease,

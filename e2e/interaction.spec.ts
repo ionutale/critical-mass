@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { gridWith, seedRun, tabTo, touchDrag, touchSwipe } from './fixtures';
+import {
+	gridWith,
+	pointerCancels,
+	realTouchDrag,
+	seedRun,
+	tabTo,
+	touchDrag,
+	touchSwipe,
+	watchPointerCancels
+} from './fixtures';
 
 test('places a card with the keyboard only (arrows + Enter)', async ({ page }) => {
 	// Cell 1 is occupied, so the keyboard ghost starts on 0 and ArrowRight skips
@@ -88,6 +97,73 @@ test.describe('touch on a 390×844 phone', () => {
 		await expect(page.getByRole('meter', { name: 'Heat' })).toHaveAttribute('aria-valuenow', '49');
 	});
 });
+
+/**
+ * A real browser gesture, not synthetic DOM events. Chrome latches
+ * `touch-action` when the finger lands, so a JS-only scroll lock cannot save a
+ * drag that resolves the pan natively: the browser would claim the gesture and
+ * fire `pointercancel`. These tests require a genuine commit and zero cancels.
+ */
+for (const viewport of [
+	{ width: 390, height: 844 },
+	{ width: 375, height: 667 }
+]) {
+	test.describe(`real touch drag at ${viewport.width}×${viewport.height}`, () => {
+		test.use({ viewport, isMobile: true, hasTouch: true });
+
+		test('commits a drag without a pointercancel', async ({ page }) => {
+			// The target is on the bottom row so both the card and the cell fit
+			// together above the fold on the shorter viewport.
+			await seedRun(page, { grid: gridWith({ 21: 'N' }) });
+			await page.goto('/');
+			await page.getByRole('button', { name: /continue run/i }).click();
+
+			const card = page.getByRole('button', { name: /card 1, H Hydrogen/i });
+			const cell = page.getByRole('button', { name: /cell 22, empty/i });
+			await cell.scrollIntoViewIfNeeded();
+			await card.scrollIntoViewIfNeeded();
+
+			const cellBox = await cell.boundingBox();
+			const cardBox = await card.boundingBox();
+			expect(cellBox).not.toBeNull();
+			expect(cardBox).not.toBeNull();
+			// A drag test that cannot see both endpoints proves nothing.
+			expect(cellBox!.y).toBeGreaterThanOrEqual(0);
+			expect(cellBox!.y + cellBox!.height).toBeLessThanOrEqual(viewport.height);
+			expect(cardBox!.y).toBeGreaterThanOrEqual(0);
+			expect(cardBox!.y + cardBox!.height).toBeLessThanOrEqual(viewport.height);
+
+			await watchPointerCancels(page);
+			await realTouchDrag(page, card, cell);
+
+			await expect(page.getByRole('button', { name: /cell 22, Si Silicon/i })).toBeVisible();
+			await expect(page.getByRole('button', { name: /cell 21, empty/i })).toBeVisible();
+			await expect(page.getByTestId('score-value')).toHaveText('8');
+			expect(await pointerCancels(page)).toBe(0);
+		});
+
+		test('reaches the board and hand by scrolling', async ({ page }) => {
+			await seedRun(page, { grid: gridWith({ 6: 'N' }) });
+			await page.goto('/');
+			await page.getByRole('button', { name: /continue run/i }).click();
+
+			const board = page.getByRole('group', { name: /reactor board/i });
+			await expect(board).toBeVisible();
+
+			const hand = page.getByRole('region', { name: /hand/i });
+			await hand.scrollIntoViewIfNeeded();
+			await expect(hand).toBeInViewport();
+			await expect(page.getByRole('button', { name: /card 1, H Hydrogen/i })).toBeInViewport();
+
+			// Layout must not push a target off the side of the screen.
+			const overflow = await page.evaluate(
+				() => document.documentElement.scrollWidth - document.documentElement.clientWidth
+			);
+			expect(overflow).toBeLessThanOrEqual(1);
+		});
+	});
+}
+
 
 test('reduced motion commits instantly and mounts no motion layer', async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });

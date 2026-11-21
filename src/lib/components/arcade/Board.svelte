@@ -94,6 +94,9 @@
 		border: 1px solid var(--line);
 		border-radius: 12px;
 		box-shadow: inset 0 0 26px rgba(56, 225, 255, 0.05);
+		/* Swipes and tile drags are resolved by pointer events, not the
+		   scroller. Static because the browser latches it at touchstart. */
+		touch-action: none;
 	}
 
 	.cell {
@@ -114,6 +117,7 @@
 			border-color 120ms ease,
 			box-shadow 120ms ease,
 			background-color 120ms ease;
+		touch-action: none;
 	}
 
 	.cell.filled {
