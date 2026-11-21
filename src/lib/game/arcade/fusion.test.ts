@@ -293,7 +293,7 @@ describe('resolvePlacement chains and scoring', () => {
 		expect(boundary.heatAfterTurn).toBe(100);
 		expect(boundary.overloadAfterTurn).toBe(true);
 
-		// A lethal chain is already at the cap, so the +3 cannot raise it further.
+		// A lethal chain is already at the cap, so the passive heat cannot raise it further.
 		const lethal = previewPlacement(chainRun({ heat: 95 }), 0, CENTER, [1, 1, 0])!;
 		expect(lethal.heatAfter).toBe(100);
 		expect(lethal.overload).toBe(true);

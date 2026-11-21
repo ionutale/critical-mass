@@ -91,7 +91,7 @@ The new game is a **turn-based arcade puzzle**: place element cards on a persist
   - **Place** a Card on an empty Cell, resolving its Chain, then end the turn.
   - **Stabilize**: discard one Card, reduce Heat, then end the turn **without drawing** — the lost Card is the cost.
   - **Scrap**: remove one Tile for free, **once per turn**; Scrap does not end the turn and costs no Card. It prevents soft-locks.
-- At the end of a **Place** turn: **Heat +3**, then draw back up to Hand size (reshuffling the discard pile when the Deck is empty). A **Stabilize** turn also adds +3 Heat but does not draw. A **Scrap** does not end the turn.
+- At the end of a **Place** turn: **passive Heat** (tuned to +4 per turn), then draw back up to Hand size (reshuffling the discard pile when the Deck is empty). A **Stabilize** turn also adds the passive Heat but does not draw. A **Scrap** does not end the turn.
 - The Reactor starts with one or two **deterministic seed Tiles** derived from the run's seed, so the first turn already offers a real choice.
 - The game is fully deterministic given the seed and the same choices; a seed is displayed and reproducible.
 
@@ -128,10 +128,10 @@ Examples: H(1,1)+H(1,1) → He(2,1); Li(1,2)+He(2,1) → N(3,2); C(3,1)+H(1,1) �
 ### 6.4 Heat, Overload, and Stabilize
 
 - Heat starts at **0**, cap **100**. Reaching 100 is **Overload** and ends the Run.
-- Heat rises by **+3 per turn**, plus each Fusion's **valence sum** (2–4), plus **+1 per Chain step after the first**.
+- Heat rises by the **passive Heat** (tuned to +4 per turn), plus each Fusion's **valence sum** (2–4), plus **+1 per Chain step after the first**.
 - **Rising floor:** Heat can never be reduced below **4 × the current turn number** (the passive heat already accumulated). Stabilize removes **15 Heat**, but only down to that floor, so cooling forever cannot outrun the clock. At 4 passive Heat per turn the floor reaches the 100 cap on turn 25, which keeps a run inside the design's 20–30 turn band without a harness-only rule.
-- **Resolution order:** a placed Chain resolves **fully** and scores; then Overload is checked; then the end-of-turn **+3** is applied and Overload is checked again. A lethal placement is a valid finisher, and the Preview can always show the exact commit.
-- **Stabilize** discards one Card, removes up to 15 Heat (to the floor), applies the end-of-turn +3, and ends the turn **without drawing**.
+- **Resolution order:** a placed Chain resolves **fully** and scores; then Overload is checked; then the end-of-turn **passive Heat** is applied and Overload is checked again. A lethal placement is a valid finisher, and the Preview can always show the exact commit.
+- **Stabilize** discards one Card, removes up to 15 Heat (to the floor), applies the end-of-turn passive Heat, and ends the turn **without drawing**.
 - **Milestones** at **25 / 50 / 75 Heat**. Each milestone crossed queues one Upgrade draft; if a single turn crosses two, two drafts are queued in order.
 - Heat never falls except through Stabilize and upgrade effects. This is the run clock.
 
@@ -218,7 +218,7 @@ Examples: H(1,1)+H(1,1) → He(2,1); Li(1,2)+He(2,1) → N(3,2); C(3,1)+H(1,1) �
 
 - **Depth vs simplicity:** valence arithmetic must generate interesting choices; the upgrade pool and board space carry much of the depth. Playtesting must confirm ≥2 viable plays.
 - **Terminal clutter:** valence-4 Tiles clog the board; the Scrap economy must keep this tense, not tedious.
-- **Heat tuning:** the +3/turn baseline and fusion costs must produce 3–8 minute runs across builds.
+- **Heat tuning:** the passive-heat baseline (tuned to +4/turn) and fusion costs must produce 3–8 minute runs across builds.
 - **Loss of roguelike variety:** removing contracts/sectors trades long-arc variety for arcade replay; score chasing and meta unlocks must compensate.
 - **Content identity:** elements of the same valence but different mass are meaningfully different only through rarity/score; playtesting should confirm that feels legible and worth building around.
 - **Gesture discoverability and conflict:** drag must not fight page scroll or browser back-swipe; swipe shortcuts need visible affordances; the keyboard path must be documented and tested.

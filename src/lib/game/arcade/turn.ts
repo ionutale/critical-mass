@@ -248,7 +248,7 @@ export function drawToHandSize(run: RunState): RunState {
 }
 
 /**
- * Close a turn: advance the turn counter, add the passive +3 Heat, draw back to
+ * Close a turn: advance the turn counter, add the passive heat Heat, draw back to
  * hand size, and refresh the once-per-turn Scrap and Heat Sink. Overload is
  * checked by the action that ends the turn (a Placement or Stabilize).
  */
@@ -278,7 +278,7 @@ function discardFromHand(run: RunState, handIndex: number): Pick<RunState, 'hand
  * end-of-turn bookkeeping in spec order.
  *
  * Heat is checked for Overload immediately after the chain (a lethal placement
- * scores and ends the run without a draw), and again after the passive +3. The
+ * scores and ends the run without a draw), and again after the passive heat. The
  * committed Heat is the Preview's clamped `heatAfterTurn`, so the two cannot
  * diverge.
  */
@@ -317,7 +317,7 @@ export function placeCard(
 
 /**
  * Close a Stabilize turn: advance the turn, refresh Scrap and Heat Sink, add the
- * passive +3, and resolve Overload. Echo makes the first Stabilize of the run
+ * passive heat, and resolve Overload. Echo makes the first Stabilize of the run
  * draw back to hand size like a Place turn; every later Stabilize draws nothing.
  */
 function finishStabilize(run: RunState): RunState {
@@ -339,10 +339,10 @@ function finishStabilize(run: RunState): RunState {
 
 /**
  * Stabilize: discard one card, cool up to 15 Heat (30 with Coolant) but never
- * below the rising floor, apply the passive +3, and end the turn without
+ * below the rising floor, apply the passive heat, and end the turn without
  * drawing. The discarded card is the cost, so an invalid hand index is a no-op
  * rather than free cooling. With an empty hand there is nothing to discard, so
- * Stabilize becomes a pure pass: no cooling, only the passive +3 and the turn
+ * Stabilize becomes a pure pass: no cooling, only the passive heat and the turn
  * advance (the rising floor still guarantees the run overloads).
  *
  * The whole action is blocked while an Upgrade draft is pending.
