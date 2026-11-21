@@ -4,6 +4,7 @@
 	import { DRAFT_UPGRADE_BY_ID } from '../../data/arcade/unlocks';
 	import type { UpgradeId } from '../../data/upgrades';
 	import { generateDraft } from '../../game/arcade/draft';
+	import { playSound } from '../../game/sound';
 	import { chooseUpgrade, run } from '../../stores/arcade';
 	import { reducedMotion, transitionDuration } from '../../stores/motion';
 
@@ -22,6 +23,23 @@
 
 	let buttons: HTMLButtonElement[] = [];
 
+	/**
+	 * One activation may arrive twice in the same task (a focused option's key
+	 * handler plus the window digit handler, or a synthetic click). The lock
+	 * drops on the next microtask so a second queued draft still works normally.
+	 */
+	let picking = false;
+
+	function pick(index: number): void {
+		if (picking) return;
+		picking = true;
+		playSound('contract');
+		onPick(index);
+		queueMicrotask(() => {
+			picking = false;
+		});
+	}
+
 	function record(id: UpgradeId) {
 		return DRAFT_UPGRADE_BY_ID.get(id);
 	}
@@ -34,7 +52,7 @@
 		if (!Number.isInteger(index) || index < 0 || index >= ids.length) return;
 
 		event.preventDefault();
-		onPick(index);
+		pick(index);
 	}
 
 	function focusAt(index: number): void {
@@ -82,7 +100,7 @@
 						type="button"
 						class="option"
 						aria-label={`${index + 1} ${upgrade?.name ?? id}: ${upgrade?.description ?? 'Upgrade'} ${upgrade?.kind ?? 'upgrade'}`}
-						onclick={() => onPick(index)}
+						onclick={() => pick(index)}
 						onkeydown={(event) => onOptionKeydown(event, index)}
 					>
 						<span class="number mono" aria-hidden="true">{index + 1}&nbsp;</span>

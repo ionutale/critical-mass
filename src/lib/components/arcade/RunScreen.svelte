@@ -1,11 +1,14 @@
 <script lang="ts">
 	import { fly } from 'svelte/transition';
+	import { get } from 'svelte/store';
 	import { firstEmptyCell, stepCell } from '../../actions/arcadeDrag';
 	import type { DragPlacementHandlers } from '../../actions/arcadeDrag';
 	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import { previewPlacement } from '../../game/arcade/fusion';
 	import type { PlacementPreview } from '../../game/arcade/fusion';
+	import { playSound } from '../../game/sound';
 	import { scrapLimit } from '../../game/arcade/turn';
+	import type { RunState } from '../../game/arcade/turn';
 	import { locked, place, run, save, scrap, stabilize } from '../../stores/arcade';
 	import { reducedMotion, transitionDuration } from '../../stores/motion';
 	import Board from './Board.svelte';
@@ -116,6 +119,12 @@
 		return result !== null && result.steps.some((step) => step.options.length > 1);
 	}
 
+	/** Play the Overload cue only on the active → Overload transition. */
+	function announceOverload(before: RunState | null): void {
+		if (before?.status === 'overload') return;
+		if (get(run)?.status === 'overload') playSound('meltdown');
+	}
+
 	/** Discard the Stabilize card with a flight into the discard counter. */
 	function commitStabilize(handIndex: number): void {
 		const state = $run;
@@ -132,6 +141,8 @@
 		}
 
 		stabilize(handIndex);
+		playSound('vent');
+		announceOverload(state);
 	}
 
 	/**
@@ -139,8 +150,11 @@
 	 * still advance into Overload instead of dead-locking. No picker opens.
 	 */
 	function stabilizePass(): void {
-		if (!$run || $locked) return;
+		const state = $run;
+		if (!state || $locked) return;
 		stabilize(0);
+		playSound('vent');
+		announceOverload(state);
 		finishTurn();
 	}
 
@@ -166,6 +180,7 @@
 
 		mode = 'place';
 		selected = selected === index ? null : index;
+		if (selected !== null) playSound('pick');
 		resetPreview();
 	}
 
@@ -176,6 +191,7 @@
 		if (mode === 'scrap') {
 			if (state.grid[cell] == null) return;
 			scrap(cell);
+			playSound('contract');
 			mode = 'place';
 			return;
 		}
@@ -235,6 +251,8 @@
 			: null;
 
 		place(index, cell, committedChoices);
+		playSound(result.steps.length > 0 ? 'fusion' : 'pick');
+		announceOverload(state);
 		playback = snapshot;
 		finishTurn();
 	}
@@ -266,6 +284,7 @@
 			ghost = null;
 			targetCell = null;
 			choices = [];
+			if (mode !== 'stabilize') playSound('pick');
 		},
 		hover(cell) {
 			if (dragIndex === null) return;
@@ -311,6 +330,7 @@
 	function scrapTile(cell: number): void {
 		if (!$run || $locked || scrapsSpent) return;
 		scrap(cell);
+		playSound('contract');
 		mode = 'place';
 		selected = null;
 		clearPlacement();
@@ -403,6 +423,7 @@
 			ghost = firstEmptyCell(state.grid);
 			targetCell = ghost;
 			choices = [];
+			playSound('pick');
 		}
 
 		const from = ghost ?? firstEmptyCell(state.grid);

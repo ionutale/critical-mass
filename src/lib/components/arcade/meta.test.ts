@@ -70,6 +70,20 @@ describe('draft overlay', () => {
 		expect(after.upgrades).toEqual([options[2]]);
 	});
 
+	it('consumes one draft when a digit and a click land in the same task', () => {
+		const before = arcadeRun({ pendingDrafts: 2 });
+		initGame({ run: before });
+		render(DraftOverlay);
+
+		const buttons = screen.getAllByRole('button');
+		// A focused option plus the window digit handler can deliver both in one
+		// task; only the first activation may spend a pending draft.
+		window.dispatchEvent(new KeyboardEvent('keydown', { key: '1' }));
+		buttons[0]!.click();
+
+		expect(get(run)!.pendingDrafts).toBe(1);
+	});
+
 	it('renders unlock-only bonus upgrades by name', async () => {
 		const onPick = vi.fn();
 		initGame({ run: arcadeRun({ pendingDrafts: 1 }) });

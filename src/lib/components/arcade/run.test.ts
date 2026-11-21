@@ -17,6 +17,15 @@ import RunScreen from './RunScreen.svelte';
 import ScoreDisplay from './ScoreDisplay.svelte';
 import type { PlaybackModel } from './choreography';
 
+const sound = vi.hoisted(() => ({
+	playSound: vi.fn(() => true),
+	setSoundEnabled: vi.fn(),
+	resetSound: vi.fn(),
+	setSoundContextFactory: vi.fn()
+}));
+
+vi.mock('../../game/sound', () => sound);
+
 const CENTER = 12;
 const CHAIN_TILES: readonly (readonly [number, ElementSymbol])[] = [
 	[7, 'H'],
@@ -135,6 +144,7 @@ function centrePlayback(run: RunState): PlaybackModel {
 beforeEach(() => {
 	window.localStorage.clear();
 	initGame();
+	sound.playSound.mockClear();
 });
 
 describe('board', () => {
@@ -1268,6 +1278,62 @@ describe('run screen choreography', () => {
 			if (original) Object.defineProperty(Element.prototype, 'animate', original);
 			else Reflect.deleteProperty(Element.prototype, 'animate');
 		}
+	});
+});
+
+describe('run screen sound', () => {
+	it('emits a pick cue on selection and a fusion cue on placement', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
+		expect(sound.playSound).toHaveBeenCalledWith('pick');
+
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /^confirm$/i
+			})
+		);
+
+		expect(sound.playSound).toHaveBeenCalledWith('fusion');
+		expect(sound.playSound).not.toHaveBeenCalledWith('meltdown');
+	});
+
+	it('emits a vent cue when Stabilize ends the turn', async () => {
+		initGame({ run: arcadeRun({ heat: 40, turn: 5 }) });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /^stabilize$/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 3,/i }));
+
+		expect(sound.playSound).toHaveBeenCalledWith('vent');
+	});
+
+	it('emits a cue when a tile is scrapped', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /scrap tile/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 7,/i }));
+
+		expect(sound.playSound).toHaveBeenCalledWith('contract');
+	});
+
+	it('emits the meltdown cue only when the placement overloads', async () => {
+		initGame({ run: arcadeRun({ heat: 99 }) });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /^confirm$/i
+			})
+		);
+
+		expect(sound.playSound).toHaveBeenCalledWith('fusion');
+		expect(sound.playSound).toHaveBeenCalledWith('meltdown');
 	});
 });
 
