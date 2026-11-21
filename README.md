@@ -16,7 +16,7 @@ The app is client-rendered (`ssr = false`) and builds to a static site with `200
 
 ## Rules
 
-The reactor is a 5×5 grid. A normal run lasts about **25 turns**: the heat floor alone reaches the cap by then.
+The reactor is a 5×5 grid. A normal run lasts about **25–26 turns**: the heat floor alone reaches the cap around then.
 
 ### Valence, mass, and fusion
 
@@ -59,7 +59,7 @@ Each fusion step scores `step × rarity`, where **rarity = valence × mass** (1�
 - **Swipe up** on the reactor to open the Stabilize picker; **swipe down** to cancel the current selection.
 - **Drag a placed tile off its cell** to Scrap it. A downward swipe cancels instead of scrapping.
 
-Every pointer path commits the same live preview, and every target is at least 44 px.
+Every pointer path commits the same live preview. Interactive targets are at least 44 px on the title, run, upgrade draft, and end screens, and the e2e suite measures them.
 
 ## Upgrades and unlocks
 
@@ -95,7 +95,7 @@ The full gate:
 pnpm check && pnpm lint && pnpm test && pnpm build && pnpm check:bundle && pnpm test:e2e && pnpm balance --check
 ```
 
-The Playwright suite runs at 390×844 and covers cold start and first placement, a run through Overload, an upgrade draft, reload/resume, offline PWA startup, keyboard-only placement, touch drag, a reduced-motion run with no motion layer, axe audits on the title, run, draft, and end screens, and 44 px checks on the title, the unlocked run screen (all 25 board cells, Stabilize, Scrap, and every hand card), the upgrade draft options, and the end screen.
+The Playwright suite runs at 390×844 and 375×667, and covers cold start and first placement, a run through Overload, an upgrade draft, reload/resume, offline PWA startup, keyboard-only placement (including branch choice), real-input touch drag through CDP `Input.dispatchTouchEvent` with a zero-`pointercancel` assertion, a reduced-motion run with no motion layer or particles, axe audits on the title, run, draft, and end screens, and 44 px checks on the title, the unlocked run screen (all 25 board cells, Stabilize, Scrap, and every hand card), the upgrade draft options, and the end screen.
 
 ### Balance
 
@@ -114,7 +114,7 @@ All content is typed data under `src/lib/data/`:
 - `upgrades.ts` — the run upgrade pool.
 - `arcade/unlocks.ts` — the lifetime unlock tree.
 
-The engine and data tests enforce the element table, upgrade ids, and unlock costs.
+The engine and data tests enforce the element table, upgrade ids, and unlock thresholds.
 
 ## PWA and offline
 

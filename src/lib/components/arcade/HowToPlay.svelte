@@ -48,7 +48,9 @@
 		<h2>Stabilize</h2>
 		<p>
 			Stabilize discards one card to remove 15 Heat, never below the rising floor of {PASSIVE_HEAT} ×
-			the turn number. It ends the turn and draws nothing, so it buys time at the cost of a card.
+			the turn number. It ends the turn and draws nothing, so it buys time at the cost of a card. With
+			an empty hand it becomes a pure pass: only the passive Heat applies, so the run still reaches Overload
+			instead of stalling.
 		</p>
 	</section>
 
@@ -64,8 +66,8 @@
 		<h2>Milestones</h2>
 		<p>
 			Crossing 25, 50, and 75 Heat each queues one Upgrade draft. The run pauses until you choose 1
-			of 3: a card bundle or a run modifier. Crossing the same milestone again never refunds a
-			second draft.
+			of 3: card stock or a modifier. Crossing the same milestone again never refunds a second
+			draft.
 		</p>
 	</section>
 
@@ -86,8 +88,8 @@
 				cancel the current selection.
 			</li>
 			<li>
-				<strong>Swipe off:</strong> drag a handled card off the board to cancel it; drag a placed tile
-				off its cell to Scrap it.
+				<strong>Drag away:</strong> drag a card off the board to cancel it; drag a placed tile off its
+				cell to Scrap it.
 			</li>
 		</ul>
 	</section>

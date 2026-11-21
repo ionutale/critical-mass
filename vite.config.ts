@@ -20,7 +20,7 @@ export default defineConfig({
 				manifest: {
 					name: 'Critical Mass',
 					short_name: 'Critical Mass',
-					description: 'Fuse the alpha ladder and climb the reactor before it melts down.',
+					description: 'Fuse light elements and climb the reactor before it melts down.',
 					theme_color: '#070B14',
 					background_color: '#070B14',
 					display: 'standalone',

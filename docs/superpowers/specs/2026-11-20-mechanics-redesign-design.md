@@ -131,7 +131,7 @@ Examples: H(1,1)+H(1,1) → He(2,1); Li(1,2)+He(2,1) → N(3,2); C(3,1)+H(1,1) �
 - Heat rises by the **passive Heat** (tuned to +4 per turn), plus each Fusion's **valence sum** (2–4), plus **+1 per Chain step after the first**.
 - **Rising floor:** Heat can never be reduced below **4 × the current turn number** (the passive heat already accumulated). Stabilize removes **15 Heat**, but only down to that floor, so cooling forever cannot outrun the clock. At 4 passive Heat per turn the floor reaches the 100 cap on turn 25, which keeps a run inside the design's 20–30 turn band without a harness-only rule.
 - **Resolution order:** a placed Chain resolves **fully** and scores; then Overload is checked; then the end-of-turn **passive Heat** is applied and Overload is checked again. A lethal placement is a valid finisher, and the Preview can always show the exact commit.
-- **Stabilize** discards one Card, removes up to 15 Heat (to the floor), applies the end-of-turn passive Heat, and ends the turn **without drawing**.
+- **Stabilize** discards one Card, removes up to 15 Heat (to the floor), applies the end-of-turn passive Heat, and ends the turn **without drawing**. With an empty hand it is a pure pass: no card is discarded, no Heat is removed, and the passive Heat still advances the clock, so a run can never dead-lock on an empty hand. Cooling never raises Heat; the rising floor only stops further cooling.
 - **Milestones** at **25 / 50 / 75 Heat**. Each milestone crossed queues one Upgrade draft; if a single turn crosses two, two drafts are queued in order.
 - Heat never falls except through Stabilize and upgrade effects. This is the run clock.
 

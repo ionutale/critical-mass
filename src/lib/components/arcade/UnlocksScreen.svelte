@@ -51,7 +51,7 @@
 
 	<p class="intro">
 		Lifetime milestones unlock automatically. They only add options — a starter card, a card in the
-		draft pool, or a run modifier — and never raise a base stat or gate an element.
+		draft pool, or a challenge modifier — and never raise a base stat or gate an element.
 	</p>
 
 	<p class="count mono" data-testid="unlock-count">

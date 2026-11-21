@@ -18,8 +18,8 @@
 - Bundle budget 250 KB gzip client JS (`pnpm check:bundle`); no new runtime dependencies.
 - Engine is pure and deterministic: same seed + same choices → same run. `preview === commit`.
 - 8-way adjacency (orthogonal + diagonal). Fusion when valence sum ≤ 4; result = element at (sum valence, higher mass tier); Rarity = valence × mass.
-- Heat cap 100; +3/turn; fusion adds valence sum plus +1 per chain step after the first; Heat never below `3 × turn`; chain resolves fully, then Overload, then end-of-turn +3, then Overload again.
-- Stabilize discards one card, cools up to 15 (to the floor), applies +3, ends the turn without drawing. Scrap is free once per turn and does not end the turn.
+- Heat cap 100; +4/turn; fusion adds valence sum plus +1 per chain step after the first; Heat never below `4 × turn`; chain resolves fully, then Overload, then end-of-turn +4, then Overload again.
+- Stabilize discards one card, cools up to 15 (to the floor), applies +4, ends the turn without drawing. Scrap is free once per turn and does not end the turn.
 - Milestones at 25/50/75 queue one 1-of-3 Upgrade draft each, in order.
 - Every Element and every Rarity is reachable on a fresh save; meta unlocks add options, not stats.
 - Gestures are accelerators, never the only path: full keyboard placement (arrows + Enter/Space, Escape cancels); swipe up opens the Stabilize picker, dragging a tile off Scraps, swipe down cancels.
@@ -40,8 +40,8 @@ The existing app must keep building until the switchover. New code lives in para
 ## Review Focus
 
 - **Preview ≠ commit under branching / 8-way:** a multi-step chain with non-default choices must commit exactly the previewed grid, score, and heat.
-- **Stabilize-only never overloads:** the rising floor (`3 × turn`) must force eventual Overload even if the player only cools.
-- **Kill order at the cap:** a lethal chain resolves fully and scores; the +3 end-of-turn is applied and checked last; no wasted steps or truncated preview.
+- **Stabilize-only never overloads:** the rising floor (`4 × turn`) must force eventual Overload even if the player only cools.
+- **Kill order at the cap:** a lethal chain resolves fully and scores; the +4 end-of-turn is applied and checked last; no wasted steps or truncated preview.
 - **Gesture without a keyboard path:** every drag placement must have a working arrow-key + Enter equivalent, and swipe shortcuts must not trap or scroll the page.
 - **Old save on load:** a v1 save must not crash; it resets the run, preserves settings, and never loses the install.
 
@@ -123,9 +123,9 @@ The existing app must keep building until the switchover. New code lives in para
 - Consumes: Task 2 `resolvePlacement`/`previewPlacement`; Task 3 `createRun`.
 - Produces: `placeCard(run, handIndex, cell, choices?: readonly number[]): RunState`; `endTurn(run): RunState`; `stabilize(run, handIndex): RunState`; `scrap(run, cell): RunState`; `drawToHandSize(run): RunState`; `applyHeat(run, amount): RunState`; `heatFloor(run): number`; `queueMilestones(run): RunState`.
 
-- [ ] **Step 1: Write failing tests:** a Place turn adds +3 after the chain, draws to 5, and resets `scrapUsed`; `placeCard` commits exactly `previewPlacement`'s grid/score/heat for non-default choices; Stabilize discards a card, cools 15 but not below `3 × turn`, adds +3, and does **not** draw; Scrap removes one tile, is limited to once per turn, and does not end the turn; a chain that reaches 100 ends `overload` **after** awarding score; a turn whose +3 crosses 100 also overloads; a stabilize-only loop still overloads within 40 turns; crossing 25 and 50 in one turn queues two drafts.
+- [ ] **Step 1: Write failing tests:** a Place turn adds +4 after the chain, draws to 5, and resets `scrapUsed`; `placeCard` commits exactly `previewPlacement`'s grid/score/heat for non-default choices; Stabilize discards a card, cools 15 but not below `4 × turn`, adds +4, and does **not** draw; Scrap removes one tile, is limited to once per turn, and does not end the turn; a chain that reaches 100 ends `overload` **after** awarding score; a turn whose +4 crosses 100 also overloads; a stabilize-only loop still overloads within 40 turns; crossing 25 and 50 in one turn queues two drafts.
 - [ ] **Step 2: Run** `pnpm test -- turn`; expect FAIL.
-- [ ] **Step 3: Implement** `placeCard` (resolve → apply score/heat → overload check → `endTurn` → overload check → milestones), `heatFloor = 3 * run.turn`, `applyHeat` clamping, `endTurn` draw/reshuffle/scrap reset, `stabilize` (discard → cool to floor → +3 → no draw → turn++), and `scrap` (once/turn, no turn end).
+- [ ] **Step 3: Implement** `placeCard` (resolve → apply score/heat → overload check → `endTurn` → overload check → milestones), `heatFloor = 4 * run.turn`, `applyHeat` clamping, `endTurn` draw/reshuffle/scrap reset, `stabilize` (discard → cool to floor → +4 → no draw → turn++), and `scrap` (once/turn, no turn end).
 - [ ] **Step 4: Run** `pnpm test -- turn && pnpm check`; expect PASS.
 - [ ] **Step 5: Commit** `feat: heat, stabilize, scrap, and overload resolution`.
 
