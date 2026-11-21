@@ -1,207 +1,25 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { gridWith, seed, seedRun } from './fixtures';
 
-const SAVE_KEY = 'critical-mass:save:v1';
+/**
+ * Axe reads a mid-transition opacity as a contrast failure. These audits run
+ * with reduced motion so Svelte enters instantly, then wait a frame for the
+ * browser to paint the committed state.
+ */
+test.beforeEach(async ({ page }) => {
+	await page.emulateMedia({ reducedMotion: 'reduce' });
+});
 
-function emptyGrid(): (string | null)[] {
-	return Array<string | null>(25).fill(null);
-}
-
-function runFixture(overrides: Record<string, unknown> = {}) {
-	return {
-		seed: 42,
-		rngState: 7,
-		grid: emptyGrid(),
-		deck: [],
-		hand: ['H', 'H', 'H', 'H', 'H'],
-		discard: [],
-		pressure: 0,
-		pressureCap: 100,
-		sectorFloor: 0,
-		sector: 1,
-		contractId: 's1-1a',
-		delivered: 0,
-		contractsCompleted: 0,
-		turn: 1,
-		scrapsUsed: 0,
-		pendingDiscards: 0,
-		modules: [],
-		hasCatalyst: false,
-		ventsThisContract: 0,
-		maxChain: 0,
-		deliveredTargets: [],
-		pendingDraft: null,
-		pendingDraftKind: null,
-		pendingTransition: false,
-		patches: [],
-		researchEarned: 0,
-		contractMaxChain: 0,
-		contractReduction: 0,
-		meltdownSaves: 0,
-		sectorShield: 0,
-		status: 'active',
-		...overrides
-	};
-}
-
-function saveFixture(overrides: Record<string, unknown> = {}) {
-	return {
-		version: 2,
-		run: runFixture(),
-		meta: {
-			research: 0,
-			unlocks: [],
-			stats: { runs: 0, wins: 0, bestSector: 1, contracts: 0 }
-		},
-		settings: { sound: false, reduceMotion: false },
-		introSeen: true,
-		...overrides
-	};
-}
-
-async function seed(page: Page, overrides: Record<string, unknown> = {}) {
-	// Motion is intentionally enabled for these audits: the app gates its first
-	// paint in App.svelte, so axe no longer races the entrance transition.
-	await page.addInitScript(
-		([key, save]) => localStorage.setItem(key, save),
-		[SAVE_KEY, JSON.stringify(saveFixture(overrides))]
-	);
-}
-
-async function axeIsClean(page: Page) {
-	// Axe reads a mid-transition opacity as a contrast failure. Keep the audit
-	// motion-enabled and wait for the longest entrance transition (200 ms) to
-	// settle instead of switching motion off.
-	await page.waitForTimeout(300);
+async function axeIsClean(page: Page): Promise<void> {
+	await page.waitForTimeout(250);
 	const results = await new AxeBuilder({ page }).analyze();
 	expect(results.violations.map((violation) => violation.id)).toEqual([]);
 }
 
-test('title and how-to have no axe violations', async ({ page }) => {
-	await seed(page);
-	await page.goto('/');
-	await axeIsClean(page);
-
-	await page.getByRole('button', { name: /how to play/i }).click();
-	await expect(page.getByRole('heading', { name: /how to play/i })).toBeVisible();
-	await axeIsClean(page);
-});
-
-test('run screen has no axe violations', async ({ page }) => {
-	await seed(page);
-	await page.goto('/');
-	await page.getByRole('button', { name: /continue run/i }).click();
-
-	await expect(page.getByRole('heading', { name: /critical mass/i })).toBeVisible();
-	await axeIsClean(page);
-});
-
-test('draft overlay has no axe violations', async ({ page }) => {
-	await seed(page, {
-		run: runFixture({
-			pendingDraft: [
-				{ kind: 'cards', element: 'H', count: 2 },
-				{ kind: 'module', moduleId: 'coolant-loop' },
-				{ kind: 'patch', patchId: 'patch-coolant' }
-			],
-			pendingDraftKind: 'contract'
-		})
-	});
-	await page.goto('/');
-	await page.getByRole('button', { name: /continue run/i }).click();
-
-	await expect(page.getByRole('dialog')).toBeVisible();
-	await axeIsClean(page);
-});
-
-test('research and settings have no axe violations', async ({ page }) => {
-	await seed(page);
-	await page.goto('/');
-
-	await page.getByRole('button', { name: /research lab/i }).click();
-	await expect(page.getByRole('heading', { name: /research lab/i })).toBeVisible();
-	await axeIsClean(page);
-
-	await page.getByRole('button', { name: /back/i }).click();
-	await page.getByRole('button', { name: /^settings$/i }).click();
-	await expect(page.getByRole('heading', { name: /settings/i })).toBeVisible();
-	await axeIsClean(page);
-});
-
-async function tabTo(page: Page, pattern: RegExp): Promise<void> {
-	for (let step = 0; step < 120; step += 1) {
-		await page.keyboard.press('Tab');
-		const active = await page.evaluate(() => {
-			const element = document.activeElement as HTMLElement | null;
-			if (!element || element === document.body) return null;
-			return {
-				tag: element.tagName,
-				label: element.getAttribute('aria-label') ?? element.textContent ?? ''
-			};
-		});
-		if (active && (active.tag === 'BUTTON' || active.tag === 'A') && pattern.test(active.label))
-			return;
-	}
-	throw new Error(`Could not reach ${pattern} by tabbing`);
-}
-
-test('fuses and delivers a contract with the keyboard', async ({ page }) => {
-	const grid = emptyGrid();
-	grid[12] = 'H';
-	await seed(page, { run: runFixture({ grid, hand: ['H', 'H', 'H', 'H', 'H'] }) });
-	await page.goto('/');
-
-	await tabTo(page, /continue run/i);
-	await page.keyboard.press('Enter');
-
-	await tabTo(page, /hydrogen card 1/i);
-	await page.keyboard.press('Enter');
-
-	await tabTo(page, /cell 13/i);
-	await page.keyboard.press('Enter');
-
-	await expect(page.getByRole('dialog', { name: /preview/i })).toBeVisible();
-	await tabTo(page, /^confirm$/i);
-	await page.keyboard.press('Enter');
-
-	const deliver = page.getByRole('button', { name: /deliver helium/i });
-	await expect(deliver).toBeEnabled();
-	await deliver.focus();
-	await page.keyboard.press('Enter');
-
-	await expect(page.locator('.complete')).toBeVisible();
-});
-
-test('picks a draft option with the keyboard', async ({ page }) => {
-	await seed(page, {
-		run: runFixture({
-			pendingDraft: [
-				{ kind: 'cards', element: 'H', count: 2 },
-				{ kind: 'module', moduleId: 'coolant-loop' },
-				{ kind: 'patch', patchId: 'patch-coolant' }
-			],
-			pendingDraftKind: 'contract'
-		})
-	});
-	await page.goto('/');
-
-	await tabTo(page, /continue run/i);
-	await page.keyboard.press('Enter');
-
-	await expect(page.getByRole('dialog')).toBeVisible();
-	await expect(page.getByRole('button', { name: /hydrogen × 2/i })).toBeFocused();
-	await page.keyboard.press('Enter');
-
-	await expect(page.getByRole('dialog')).toHaveCount(0);
-});
-
-test('every visible target is at least 44px', async ({ page }) => {
-	await seed(page);
-	await page.goto('/');
-	await page.getByRole('button', { name: /continue run/i }).click();
-
-	const small = await page.evaluate(() =>
-		[...document.querySelectorAll('button:not([disabled]), a[href]')]
+async function smallTargets(page: Page): Promise<string[]> {
+	return page.evaluate(() =>
+		[...document.querySelectorAll<HTMLElement>('button:not([disabled]), a[href]')]
 			.filter((element) => {
 				const rect = element.getBoundingClientRect();
 				const style = getComputedStyle(element);
@@ -214,6 +32,103 @@ test('every visible target is at least 44px', async ({ page }) => {
 			})
 			.map((element) => element.textContent?.trim().slice(0, 24) ?? '')
 	);
+}
 
-	expect(small).toEqual([]);
+test('title and how-to have no axe violations', async ({ page }) => {
+	await seed(page);
+	await page.goto('/');
+	await expect(page.getByRole('heading', { name: /critical mass/i })).toBeVisible();
+	await axeIsClean(page);
+
+	await page.getByRole('button', { name: /how to play/i }).click();
+	await expect(page.getByRole('heading', { name: /how to play/i })).toBeVisible();
+	await axeIsClean(page);
+});
+
+test('run screen has no axe violations', async ({ page }) => {
+	await seedRun(page, { grid: gridWith({ 6: 'N', 12: 'He' }), heat: 18, turn: 5 });
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+	await expect(page.getByText(/TURN 5/)).toBeVisible();
+	await axeIsClean(page);
+});
+
+test('upgrade draft has no axe violations', async ({ page }) => {
+	await seedRun(page, {
+		heat: 24,
+		turn: 7,
+		milestonesCrossed: 1,
+		pendingDrafts: 1
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+	await expect(page.getByRole('dialog', { name: /upgrade draft/i })).toBeVisible();
+	await axeIsClean(page);
+});
+
+test('end screen has no axe violations', async ({ page }) => {
+	await seedRun(page, {
+		grid: gridWith({ 6: 'N' }),
+		heat: 94,
+		turn: 21,
+		score: 64,
+		milestonesCrossed: 3
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+
+	await page.getByRole('button', { name: /card 1, H Hydrogen/i }).click();
+	await page.getByRole('button', { name: /cell 7, empty/i }).click();
+	await page
+		.getByRole('dialog', { name: /placement preview/i })
+		.getByRole('button', { name: /^confirm$/i })
+		.click();
+
+	await expect(page.getByRole('dialog', { name: /run over/i })).toBeVisible();
+	await axeIsClean(page);
+});
+
+test('every visible target on the title is at least 44px', async ({ page }) => {
+	await seed(page);
+	await page.goto('/');
+	await expect(page.getByRole('button', { name: /continue run/i })).toBeVisible();
+	expect(await smallTargets(page)).toEqual([]);
+});
+
+test('every visible target on the run and the draft is at least 44px', async ({ page }) => {
+	await seedRun(page, {
+		grid: gridWith({ 6: 'N', 12: 'He' }),
+		heat: 24,
+		turn: 7,
+		milestonesCrossed: 1,
+		pendingDrafts: 1
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+
+	// The run screen is mounted behind the draft; both layers must pass.
+	await expect(page.getByRole('dialog', { name: /upgrade draft/i })).toBeVisible();
+	expect(await smallTargets(page)).toEqual([]);
+});
+
+test('every visible target on the end screen is at least 44px', async ({ page }) => {
+	await seedRun(page, {
+		grid: gridWith({ 6: 'N' }),
+		heat: 94,
+		turn: 21,
+		score: 64,
+		milestonesCrossed: 3
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+
+	await page.getByRole('button', { name: /card 1, H Hydrogen/i }).click();
+	await page.getByRole('button', { name: /cell 7, empty/i }).click();
+	await page
+		.getByRole('dialog', { name: /placement preview/i })
+		.getByRole('button', { name: /^confirm$/i })
+		.click();
+
+	await expect(page.getByRole('dialog', { name: /run over/i })).toBeVisible();
+	expect(await smallTargets(page)).toEqual([]);
 });

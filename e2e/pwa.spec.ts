@@ -13,6 +13,7 @@ test('is installable and opens offline after the first load', async ({ page, con
 	const sizes = manifest.icons.map((icon: { sizes: string }) => icon.sizes);
 	expect(sizes).toEqual(expect.arrayContaining(['192x192', '512x512']));
 	expect(manifest.display).toBe('standalone');
+	expect(manifest.name).toBe('Critical Mass');
 
 	await page.evaluate(async () => {
 		await navigator.serviceWorker.ready;
