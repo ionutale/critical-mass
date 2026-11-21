@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initGame, newRun, run, save } from '../stores/game';
 	import { setSoundEnabled } from '../game/sound';
+	import { initGame, newRun, run, save } from '../stores/arcade';
 	import { reducedMotion } from '../stores/motion';
-	import HowToPlay from './HowToPlay.svelte';
-	import ResearchLab from './ResearchLab.svelte';
-	import RunScreen from './RunScreen.svelte';
-	import SettingsScreen from './SettingsScreen.svelte';
-	import TitleScreen from './TitleScreen.svelte';
+	import HowToPlay from './arcade/HowToPlay.svelte';
+	import RunScreen from './arcade/RunScreen.svelte';
+	import SettingsScreen from './arcade/SettingsScreen.svelte';
+	import TitleScreen from './arcade/TitleScreen.svelte';
+	import UnlocksScreen from './arcade/UnlocksScreen.svelte';
 
-	type View = 'title' | 'run' | 'research' | 'settings' | 'howto';
+	type View = 'title' | 'run' | 'unlocks' | 'howto' | 'settings';
 
 	let view = $state<View>('title');
 	// The saved Reduce Motion setting only exists after initGame(), which runs
@@ -36,8 +36,8 @@
 	{#key view}
 		{#if view === 'run' && $run}
 			<RunScreen onMenu={() => (view = 'title')} />
-		{:else if view === 'research'}
-			<ResearchLab onBack={() => (view = 'title')} />
+		{:else if view === 'unlocks'}
+			<UnlocksScreen onBack={() => (view = 'title')} />
 		{:else if view === 'settings'}
 			<SettingsScreen onBack={() => (view = 'title')} />
 		{:else if view === 'howto'}
@@ -45,9 +45,9 @@
 		{:else}
 			<TitleScreen
 				{hydrated}
+				onPlay={startNewRun}
 				onContinue={() => (view = 'run')}
-				onNewRun={startNewRun}
-				onResearch={() => (view = 'research')}
+				onUnlocks={() => (view = 'unlocks')}
 				onSettings={() => (view = 'settings')}
 				onHowTo={() => (view = 'howto')}
 			/>

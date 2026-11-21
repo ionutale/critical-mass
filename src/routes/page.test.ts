@@ -13,6 +13,6 @@ describe('page', () => {
 		expect(screen.getByRole('heading', { name: /critical mass/i })).toBeInTheDocument();
 		await fireEvent.click(screen.getByRole('button', { name: /continue run/i }));
 
-		expect(screen.getByLabelText(/pressure 0 of 100/i)).toBeInTheDocument();
+		expect(screen.getByRole('group', { name: /reactor board/i })).toBeInTheDocument();
 	});
 });

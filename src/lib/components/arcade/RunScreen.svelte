@@ -11,11 +11,15 @@
 	import ChainPlayback from './ChainPlayback.svelte';
 	import { animationsAvailable, capturePlayback, boxOf, flyProxy } from './choreography';
 	import type { PlaybackModel } from './choreography';
+	import DraftOverlay from './DraftOverlay.svelte';
+	import EndScreen from './EndScreen.svelte';
 	import Hand from './Hand.svelte';
 	import HeatBar from './HeatBar.svelte';
 	import PreviewPanel from './PreviewPanel.svelte';
 	import ScoreDisplay from './ScoreDisplay.svelte';
 	import StabilizePicker from './StabilizePicker.svelte';
+
+	let { onMenu }: { onMenu?: () => void } = $props();
 
 	type Mode = 'place' | 'stabilize' | 'scrap';
 
@@ -373,6 +377,9 @@
 				<p class="seed mono">SEED {$run.seed}</p>
 			</div>
 			<div class="score-slot" bind:this={scoreEl} data-motion={scoreMotion}>
+				{#if onMenu}
+					<button class="menu" type="button" onclick={onMenu}>Menu</button>
+				{/if}
 				<ScoreDisplay score={$run.score} best={$save.meta.bestScore} runs={$save.meta.runs} />
 			</div>
 		</header>
@@ -480,6 +487,12 @@
 	{#if pickerOpen}
 		<StabilizePicker cards={$run.hand} onPick={pickStabilize} onCancel={cancel} />
 	{/if}
+
+	{#if $run.status === 'overload'}
+		<EndScreen {onMenu} />
+	{:else if $run.pendingDrafts > 0}
+		<DraftOverlay />
+	{/if}
 {/if}
 
 <style>
@@ -497,6 +510,32 @@
 		justify-content: space-between;
 		gap: 12px;
 		margin-bottom: 2px;
+	}
+
+	.score-slot {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 4px;
+	}
+
+	.menu {
+		min-height: 44px;
+		padding: 0 12px;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		color: var(--muted);
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 7px;
+	}
+
+	@media (hover: hover) {
+		.menu:hover {
+			color: var(--text);
+			border-color: rgba(56, 225, 255, 0.55);
+		}
 	}
 
 	.kicker {
