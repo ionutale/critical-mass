@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { get } from 'svelte/store';
 	import { firstEmptyCell, stepCell } from '../../actions/arcadeDrag';
@@ -50,6 +51,28 @@
 	let burst = $state(0);
 	let particleMode = $state<'fusion' | 'meltdown'>('fusion');
 
+	/**
+	 * The End screen waits for the Overload surge so the shake and bar pulse are
+	 * visible. Reduced motion (or no WAAPI) shows it immediately.
+	 */
+	let endReady = $state(false);
+
+	$effect(() => {
+		const status = $run?.status;
+		if (status !== 'overload') {
+			endReady = false;
+			return;
+		}
+		if (motionEnabled()) {
+			const delay = untrack(() => (playback?.overload ? 1200 : 250));
+			const timer = setTimeout(() => {
+				endReady = true;
+			}, delay);
+			return () => clearTimeout(timer);
+		}
+		endReady = true;
+	});
+
 	/** DOM nodes captured before a commit drives the playback. */
 	let stageEl = $state<HTMLElement | null>(null);
 	let handEl = $state<HTMLElement | null>(null);
@@ -81,6 +104,7 @@
 		return ELEMENT_BY_SYMBOL.get(tile)?.name ?? tile;
 	});
 	const hint = $derived.by(() => {
+		if (hand.length === 0) return 'Hand empty. Stabilize to pass the turn.';
 		if (mode === 'stabilize') return 'Choose a card to Stabilize.';
 		if (mode === 'scrap') return 'Choose a placed tile to Scrap.';
 		if (preview && targetCell !== null) {
@@ -274,6 +298,15 @@
 	/** Clear a finished playback unless a newer placement already replaced it. */
 	function finishPlayback(id: number): void {
 		if (playback?.id === id) playback = null;
+	}
+
+	/** Play again installs a fresh run; drop every trace of the finished one. */
+	function resetForNewRun(): void {
+		playback = null;
+		pickerOpen = false;
+		burst = 0;
+		particleMode = 'fusion';
+		finishTurn();
 	}
 
 	function confirm(): void {
@@ -591,7 +624,9 @@
 	{/if}
 
 	{#if $run.status === 'overload'}
-		<EndScreen {onMenu} />
+		{#if endReady}
+			<EndScreen {onMenu} onPlayAgain={resetForNewRun} />
+		{/if}
 	{:else if $run.pendingDrafts > 0}
 		<DraftOverlay />
 	{/if}

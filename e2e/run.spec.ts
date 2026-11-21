@@ -159,6 +159,30 @@ test('a mid-run reload keeps the board, score, heat, and turn', async ({ page })
 	await expect(page.getByRole('button', { name: /card 1, Li Lithium/i })).toBeVisible();
 });
 
+test('the overload surge plays before the end screen appears', async ({ page }) => {
+	await seedRun(page, {
+		grid: gridWith({ 6: 'N' }),
+		heat: 99,
+		turn: 21,
+		milestonesCrossed: 3
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+
+	await page.getByRole('button', { name: /card 1, H Hydrogen/i }).click();
+	await page.getByRole('button', { name: /cell 7, empty/i }).click();
+	await page
+		.getByRole('dialog', { name: /placement preview/i })
+		.getByRole('button', { name: /^confirm$/i })
+		.click();
+
+	// The committed state is lethal, but the end overlay waits for the shake.
+	await expect(page.getByTestId('chain-playback')).toBeVisible();
+	await expect(page.getByRole('dialog', { name: /run over/i })).toHaveCount(0);
+	await expect(page.getByRole('dialog', { name: /run over/i })).toBeVisible({ timeout: 4000 });
+	await expect(page.getByTestId('chain-playback')).toHaveCount(0);
+});
+
 test('an empty hand can still Stabilize into Overload', async ({ page }) => {
 	// Five Stabilizes with a card in hand empty the hand without drawing. Before
 	// the fix, handEmpty disabled Stabilize and no card could be placed, so the
