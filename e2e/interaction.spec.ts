@@ -52,6 +52,38 @@ test('Escape cancels a keyboard placement without committing', async ({ page }) 
 	await expect(page.getByRole('meter', { name: 'Heat' })).toHaveAttribute('aria-valuenow', '0');
 });
 
+test('keyboard opens the branch choices and commits a non-default path', async ({ page }) => {
+	// C at the centre can fuse with H, Li, or Na: three different results.
+	await seedRun(page, {
+		grid: gridWith({ 7: 'H', 13: 'Li', 17: 'Na' }),
+		hand: ['C', 'H', 'Li', 'He', 'Be']
+	});
+	await page.goto('/');
+	await tabTo(page, /continue run/i);
+	await page.keyboard.press('Enter');
+
+	await tabTo(page, /card 1, C Carbon/i);
+	for (const key of ['ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowRight']) {
+		await page.keyboard.press(key);
+	}
+	await expect(page.getByTestId('preview-result')).toHaveText('Neon');
+
+	// Enter opens the branch modal; the first option owns focus.
+	await page.keyboard.press('Enter');
+	const modal = page.getByRole('dialog', { name: /placement preview/i });
+	await expect(modal).toBeVisible();
+	await expect(modal.getByText(/choose a branch/i)).toBeVisible();
+	await expect(modal.getByTestId('preview-option-1-0')).toBeFocused();
+
+	await modal.getByRole('button', { name: /sodium\s*→\s*iron/i }).click();
+	await expect(modal.getByTestId('preview-result')).toHaveText('Iron');
+	await modal.getByRole('button', { name: /^confirm$/i }).click();
+
+	await expect(page.getByRole('button', { name: /cell 12, Fe Iron/i })).toBeVisible();
+	await expect(page.getByRole('button', { name: /cell 17, empty/i })).toBeVisible();
+});
+
+
 test.describe('touch on a 390×844 phone', () => {
 	test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
@@ -70,6 +102,35 @@ test.describe('touch on a 390×844 phone', () => {
 		await expect(page.getByRole('button', { name: /cell 6, empty/i })).toBeVisible();
 		await expect(page.getByRole('meter', { name: 'Heat' })).toHaveAttribute('aria-valuenow', '8');
 		await expect(page.getByTestId('score-value')).toHaveText('8');
+	});
+
+	test('drag release opens the branch modal and commits a non-default path', async ({ page }) => {
+		await seedRun(page, {
+			grid: gridWith({ 7: 'H', 13: 'Li', 17: 'Na' }),
+			hand: ['C', 'H', 'Li', 'He', 'Be']
+		});
+		await page.goto('/');
+		await page.getByRole('button', { name: /continue run/i }).click();
+
+		await touchDrag(
+			page,
+			page.getByRole('button', { name: /card 1, C Carbon/i }),
+			page.getByRole('button', { name: /cell 12, empty/i })
+		);
+
+		const modal = page.getByRole('dialog', { name: /placement preview/i });
+		await expect(modal).toBeVisible();
+		await expect(modal.getByText(/choose a branch/i)).toBeVisible();
+		await expect(modal.getByTestId('preview-option-1-0')).toBeFocused();
+		await expect(modal.getByTestId('preview-result')).toHaveText('Neon');
+		await expect(modal.getByRole('button', { name: /→/i })).toHaveCount(3);
+
+		await modal.getByRole('button', { name: /sodium\s*→\s*iron/i }).click();
+		await expect(modal.getByTestId('preview-result')).toHaveText('Iron');
+		await modal.getByRole('button', { name: /^confirm$/i }).click();
+
+		await expect(page.getByRole('button', { name: /cell 12, Fe Iron/i })).toBeVisible();
+		await expect(page.getByRole('button', { name: /cell 17, empty/i })).toBeVisible();
 	});
 
 	test('swipe up on the reactor opens the Stabilize picker', async ({ page }) => {

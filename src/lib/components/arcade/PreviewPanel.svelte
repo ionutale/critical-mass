@@ -38,6 +38,9 @@
 
 	const placed = $derived(name(card));
 	const result = $derived(preview.grid[cell] ?? card);
+	/** A modal opens on the first branch option so choices are reachable forwards. */
+	const branching = $derived(preview.steps.some((step) => step.options.length > 1));
+	const initialFocus = $derived(branching ? '.option' : '.confirm');
 
 	/** Escape closes the inline docks; the modal is handled by `trapFocus`. */
 	function onDockKeydown(event: KeyboardEvent): void {
@@ -50,6 +53,10 @@
 {#snippet body()}
 	<p class="kicker mono">PLACEMENT PREVIEW</p>
 	<p class="placed">Placing <strong>{placed}</strong></p>
+
+	{#if branching && mode === 'modal'}
+		<p class="branch-hint">Choose a branch for each step, then confirm.</p>
+	{/if}
 
 	{#if preview.steps.length > 0}
 		<ol class="steps" aria-label="Chain steps">
@@ -133,7 +140,7 @@
 			role="dialog"
 			aria-modal="true"
 			aria-label="Placement preview"
-			use:trapFocus={{ onEscape: onCancel, initialFocus: '.confirm' }}
+			use:trapFocus={{ onEscape: onCancel, initialFocus }}
 		>
 			{@render body()}
 		</div>
@@ -195,6 +202,12 @@
 
 	.placed strong {
 		color: var(--text);
+	}
+
+	.branch-hint {
+		margin: -6px 0 12px;
+		font-size: 11px;
+		color: var(--muted);
 	}
 
 	.steps {

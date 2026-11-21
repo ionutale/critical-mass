@@ -33,7 +33,7 @@ Two tiles fuse when their **valence sum is 4 or less**. The result sits at that 
 
 - Fusion checks all **8 neighbours**, not just the four compass directions.
 - Only the **placed tile** fuses. Each step consumes one neighbour; the chain repeats from the placed cell until no recipe matches.
-- When several neighbours are fusable, the preview offers every branch (default order N, E, S, W, then diagonals). The preview must equal the commit: same steps, same result tile, same heat.
+- When several neighbours are fusable, the preview offers every branch (default order N, E, S, W, then diagonals). Tap, drag, and keyboard placements all open the branch choices before committing, so no path silently takes a default. The preview must equal the commit: same steps, same result tile, same heat.
 
 ### Heat
 
@@ -53,9 +53,9 @@ Each fusion step scores `step × rarity`, where **rarity = valence × mass** (1�
 
 ## Controls
 
-- **Drag:** drag a card from the hand onto an empty cell. Release over the cell to place it; drag it off the board or swipe down to cancel.
-- **Tap:** tap a card, then tap an empty cell to open the placement preview. Confirm to commit exactly the path shown.
-- **Keyboard:** focus a card, move the targeting ghost with the arrow keys (it skips occupied cells), press Enter or Space to commit, and Escape to cancel.
+- **Drag:** drag a card from the hand onto an empty cell. Release over the cell to place it; if the chain has a branch, the preview opens on its options so you can choose the path before confirming. Drag it off the board or swipe down to cancel.
+- **Tap:** tap a card, then tap an empty cell to open the placement preview. Choose a branch if one is offered, then confirm to commit exactly the path shown.
+- **Keyboard:** focus a card, move the targeting ghost with the arrow keys (it skips occupied cells), press Enter or Space to open the preview, choose a branch when offered, and confirm; Escape cancels.
 - **Swipe up** on the reactor to open the Stabilize picker; **swipe down** to cancel the current selection.
 - **Drag a placed tile off its cell** to Scrap it. A downward swipe cancels instead of scrapping.
 

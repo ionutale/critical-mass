@@ -424,7 +424,7 @@ describe('run screen', () => {
 });
 
 describe('run screen drag', () => {
-	it('drags a card onto a cell and commits exactly the live preview', async () => {
+	it('drags a card onto a cell, then confirms the branching modal', async () => {
 		const before = arcadeRun();
 		const expected = previewPlacement(before, 0, CENTER)!;
 		initGame({ run: before });
@@ -446,10 +446,18 @@ describe('run screen drag', () => {
 			String(expected.heatAfterTurn)
 		);
 
+		// The release hands the branching chain to the modal instead of silently
+		// committing option 0.
 		await fireEvent.pointerUp(cell, DRAG_OVER);
 
 		expect(document.querySelector('[data-drag-ghost]')).toBeNull();
 		expect(document.body.style.touchAction).toBe('');
+		const modal = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(within(modal).getAllByRole('button', { name: /→/i }).length).toBeGreaterThan(0);
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
+
+		await fireEvent.click(within(modal).getByRole('button', { name: /^confirm$/i }));
+
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Neon');
 		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('empty');
@@ -459,6 +467,28 @@ describe('run screen drag', () => {
 		);
 		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent(
 			String(expected.scoreGain)
+		);
+	});
+
+	it('commits a non-branching drag directly', async () => {
+		// One fusable neighbour means one path: the release is the commit.
+		const before = arcadeRun({ grid: gridWith([[7, 'H']]) });
+		const expected = previewPlacement(before, 0, CENTER)!;
+		expect(expected.steps[0]?.options).toHaveLength(1);
+		initGame({ run: before });
+		render(RunScreen);
+
+		const card = screen.getByRole('button', { name: /card 1,/i });
+		const cell = screen.getByRole('button', { name: /^cell 12,/i });
+		await fireEvent.pointerDown(card, DRAG_START);
+		await fireEvent.pointerMove(cell, DRAG_OVER);
+		await fireEvent.pointerUp(cell, DRAG_OVER);
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Helium');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(expected.heatAfterTurn)
 		);
 	});
 
@@ -492,6 +522,13 @@ describe('run screen drag', () => {
 			clientX: 220,
 			clientY: 220
 		});
+
+		// Releasing on a branch still requires the modal's confirmation.
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /^confirm$/i
+			})
+		);
 
 		expect(screen.getByRole('button', { name: /^cell 18,/i })).toHaveTextContent('Carbon');
 		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
@@ -552,6 +589,12 @@ describe('run screen drag', () => {
 			screen.getByRole('button', { name: /card 1,/i }),
 			screen.getByRole('button', { name: /^cell 12,/i })
 		);
+		// Reduced motion removes the choreography, not the branch choice.
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /^confirm$/i
+			})
+		);
 
 		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Neon');
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
@@ -582,10 +625,12 @@ describe('run screen drag', () => {
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 	});
 
-	it('hides branch buttons in the drag dock and commits the default preview', async () => {
+	it('opts a drag into the branch modal and commits a non-default path', async () => {
 		const before = branchRun();
-		const expected = previewPlacement(before, 0, CENTER)!;
-		expect(expected.grid[CENTER]).toBe('Ne');
+		const defaultPreview = previewPlacement(before, 0, CENTER)!;
+		const chosenPreview = previewPlacement(before, 0, CENTER, [2])!;
+		expect(defaultPreview.grid[CENTER]).toBe('Ne');
+		expect(chosenPreview.grid[CENTER]).toBe('Fe');
 		initGame({ run: before });
 		render(RunScreen);
 
@@ -594,16 +639,37 @@ describe('run screen drag', () => {
 		await fireEvent.pointerDown(card, DRAG_START);
 		await fireEvent.pointerMove(cell, DRAG_OVER);
 
+		// The live dock stays compact while the finger is down.
 		const dock = screen.getByRole('dialog', { name: /placement preview/i });
-		expect(within(dock).queryAllByRole('button', { name: /→/ })).toHaveLength(0);
 		expect(within(dock).queryByTestId('preview-option-1-0')).not.toBeInTheDocument();
-		expect(within(dock).getByTestId('preview-score')).toHaveTextContent(`+${expected.scoreGain}`);
+		expect(within(dock).getByTestId('preview-score')).toHaveTextContent(
+			`+${defaultPreview.scoreGain}`
+		);
 
 		await fireEvent.pointerUp(cell, DRAG_OVER);
 
-		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Neon');
+		// On release the modal exposes every branch and lands focus on the first
+		// option, so the drag path can pick a non-default result.
+		const modal = screen.getByRole('dialog', { name: /placement preview/i });
+		const options = within(modal).getAllByRole('button', { name: /→/i });
+		expect(options).toHaveLength(3);
+		await fireEvent.click(within(modal).getByRole('button', { name: /sodium.*iron/i }));
+		expect(within(modal).getByTestId('preview-result')).toHaveTextContent('Iron');
+		expect(within(modal).getByTestId('preview-score')).toHaveTextContent(
+			`+${chosenPreview.scoreGain}`
+		);
+		await fireEvent.click(within(modal).getByRole('button', { name: /^confirm$/i }));
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Iron');
+		expect(screen.getByRole('button', { name: /^cell 17,/i })).toHaveTextContent('empty');
+		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('Hydrogen');
 		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent(
-			String(expected.scoreGain)
+			String(chosenPreview.scoreGain)
+		);
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(chosenPreview.heatAfterTurn)
 		);
 	});
 
@@ -720,8 +786,10 @@ describe('run screen scroll handling', () => {
 
 describe('run screen keyboard', () => {
 	it('moves a ghost with the arrow keys and commits the preview on Enter', async () => {
-		const before = arcadeRun();
+		// One fusable neighbour: the preview has a single path, so Enter commits.
+		const before = arcadeRun({ grid: gridWith([[7, 'H']]) });
 		const expected = previewPlacement(before, 0, 6)!;
+		expect(expected.steps[0]?.options).toHaveLength(1);
 		initGame({ run: before });
 		render(RunScreen);
 
@@ -765,6 +833,45 @@ describe('run screen keyboard', () => {
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
 			'aria-valuenow',
 			String(expected.heatAfterTurn)
+		);
+	});
+
+	it('opens the branch modal for the keyboard and commits the chosen path', async () => {
+		const before = branchRun();
+		const chosen = previewPlacement(before, 0, CENTER, [2])!;
+		expect(chosen.grid[CENTER]).toBe('Fe');
+		initGame({ run: before });
+		render(RunScreen);
+
+		const card = screen.getByRole('button', { name: /card 1,/i });
+		card.focus();
+		// Walk the ghost from 0 to the branchy centre cell 12.
+		for (const key of ['ArrowDown', 'ArrowDown', 'ArrowRight', 'ArrowRight']) {
+			await fireEvent.keyDown(card, { key });
+		}
+
+		const dock = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(within(dock).getByTestId('preview-result')).toHaveTextContent('Neon');
+
+		await fireEvent.keyDown(card, { key: 'Enter' });
+
+		// Enter must not commit option 0 silently: it opens the modal with focus
+		// on the first branch button.
+		const modal = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(document.activeElement).toBe(within(modal).getByTestId('preview-option-1-0'));
+		expect(within(modal).getByText(/choose a branch/i)).toBeInTheDocument();
+
+		await fireEvent.click(within(modal).getByRole('button', { name: /sodium.*iron/i }));
+		expect(within(modal).getByTestId('preview-result')).toHaveTextContent('Iron');
+		await fireEvent.click(within(modal).getByRole('button', { name: /^confirm$/i }));
+
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Iron');
+		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent(
+			String(chosen.scoreGain)
+		);
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(chosen.heatAfterTurn)
 		);
 	});
 
@@ -873,8 +980,19 @@ describe('run screen branch choices', () => {
 		expect(state.heat).toBe(fallback.heatAfterTurn);
 	});
 
-	it('opens the tap preview with focus on Confirm, not the branch buttons', async () => {
+	it('opens the tap preview with focus on the first branch option', async () => {
 		initGame({ run: branchRun() });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+
+		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(document.activeElement).toBe(within(dialog).getByTestId('preview-option-1-0'));
+	});
+
+	it('focuses Confirm when the preview has no branches', async () => {
+		initGame({ run: arcadeRun({ grid: gridWith([[7, 'H']]) }) });
 		render(RunScreen);
 
 		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));

@@ -4,6 +4,7 @@
 	import type { DragPlacementHandlers } from '../../actions/arcadeDrag';
 	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import { previewPlacement } from '../../game/arcade/fusion';
+	import type { PlacementPreview } from '../../game/arcade/fusion';
 	import { scrapLimit } from '../../game/arcade/turn';
 	import { locked, place, run, save, scrap, stabilize } from '../../stores/arcade';
 	import { reducedMotion, transitionDuration } from '../../stores/motion';
@@ -34,6 +35,8 @@
 	let choices = $state<number[]>([]);
 	let mode = $state<Mode>('place');
 	let pickerOpen = $state(false);
+	/** True when a gesture ended on a branching play and the modal must confirm it. */
+	let branchPrompt = $state(false);
 
 	/** Chain playback mounted after a commit; a new placement replaces it. */
 	let playback = $state<PlaybackModel | null>(null);
@@ -85,6 +88,7 @@
 		targetCell = null;
 		ghost = null;
 		choices = [];
+		branchPrompt = false;
 	}
 
 	function finishTurn(): void {
@@ -101,6 +105,15 @@
 	/** Motion runs only when the user allows it and the browser can animate. */
 	function motionEnabled(): boolean {
 		return !$reducedMotion && animationsAvailable();
+	}
+
+	/**
+	 * True when any chain step offers more than one neighbour. A gesture must
+	 * not silently commit the default branch: it opens the preview modal with
+	 * the target already chosen so the player can pick the path.
+	 */
+	function hasBranches(result: PlacementPreview | null): boolean {
+		return result !== null && result.steps.some((step) => step.options.length > 1);
 	}
 
 	/** Discard the Stabilize card with a flight into the discard counter. */
@@ -268,6 +281,26 @@
 			}
 		},
 		commit(index, cell) {
+			const state = $run;
+			if (!state || $locked || state.grid[cell] != null) {
+				cancelPlacement();
+				return;
+			}
+
+			// Hand the gesture's play to the modal when it offers a branch; a
+			// drag-only player must still be able to choose the path.
+			dragIndex = null;
+			selected = index;
+			if (cell !== targetCell) {
+				targetCell = cell;
+				choices = [];
+			}
+			const result = previewPlacement(state, index, cell, choices);
+			if (hasBranches(result)) {
+				branchPrompt = true;
+				return;
+			}
+
 			commitPlacement(index, cell);
 		},
 		cancel() {
@@ -351,6 +384,12 @@
 		if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
 			if (selected === index && targetCell !== null && preview) {
 				event.preventDefault();
+				// Branches get the modal too, so the keyboard path lands on the
+				// option buttons instead of silently taking option 0.
+				if (hasBranches(preview)) {
+					branchPrompt = true;
+					return;
+				}
 				commitPlacement(index, targetCell);
 			}
 			return;
@@ -380,11 +419,13 @@
 	}
 
 	const previewMode = $derived(
-		dragIndex !== null
-			? ('drag' as const)
-			: ghost !== null
-				? ('keyboard' as const)
-				: ('modal' as const)
+		branchPrompt
+			? ('modal' as const)
+			: dragIndex !== null
+				? ('drag' as const)
+				: ghost !== null
+					? ('keyboard' as const)
+					: ('modal' as const)
 	);
 </script>
 
