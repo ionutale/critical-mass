@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { dragPlacement } from '../../actions/arcadeDrag';
+	import type { DragPlacementHandlers } from '../../actions/arcadeDrag';
 	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import type { ElementSymbol } from '../../types';
 
@@ -6,12 +8,18 @@
 		cards,
 		selected = null,
 		disabled = false,
-		onSelect
+		onSelect,
+		drag = null,
+		onKeyDown
 	}: {
 		cards: readonly ElementSymbol[];
 		selected?: number | null;
 		disabled?: boolean;
 		onSelect?: (index: number) => void;
+		/** Pointer-drag gestures shared by every card; see `arcadeDrag`. */
+		drag?: DragPlacementHandlers | null;
+		/** Arrow/Enter/Escape handling for the focused card. */
+		onKeyDown?: (event: KeyboardEvent, index: number) => void;
 	} = $props();
 </script>
 
@@ -27,7 +35,14 @@
 				aria-pressed={selected === index}
 				aria-label={`${card} ${record?.name ?? card} card ${index + 1}, valence ${record?.valence ?? '?'}, mass ${record?.mass ?? '?'}`}
 				{disabled}
+				use:dragPlacement={{
+					cardIndex: index,
+					symbol: card,
+					disabled,
+					handlers: drag ?? undefined
+				}}
 				onclick={() => onSelect?.(index)}
+				onkeydown={(event) => onKeyDown?.(event, index)}
 			>
 				<span class="symbol" aria-hidden="true">{card}</span>
 				<span class="name" aria-hidden="true">{record?.name ?? card}</span>

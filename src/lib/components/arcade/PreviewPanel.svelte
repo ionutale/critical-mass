@@ -10,6 +10,8 @@
 		card,
 		cell,
 		heatCap,
+		mode = 'modal',
+		onChoose,
 		onConfirm,
 		onCancel
 	}: {
@@ -19,6 +21,13 @@
 		/** Target cell, used to read the resulting tile from the previewed grid. */
 		cell: number;
 		heatCap: number;
+		/**
+		 * `modal` is the tap flow; `keyboard` keeps focus on the card; `drag`
+		 * commits on release, so it shows no action buttons.
+		 */
+		mode?: 'modal' | 'keyboard' | 'drag';
+		/** Select option `option` for 0-based chain `step`; recomputes the preview. */
+		onChoose?: (step: number, option: number) => void;
 		onConfirm: () => void;
 		onCancel: () => void;
 	} = $props();
@@ -31,70 +40,102 @@
 	const result = $derived(preview.grid[cell] ?? card);
 </script>
 
-<div class="backdrop">
-	<div
-		class="panel"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Placement preview"
-		use:trapFocus={{ onEscape: onCancel }}
-	>
-		<p class="kicker mono">PLACEMENT PREVIEW</p>
-		<p class="placed">Placing <strong>{placed}</strong></p>
+{#snippet body()}
+	<p class="kicker mono">PLACEMENT PREVIEW</p>
+	<p class="placed">Placing <strong>{placed}</strong></p>
 
-		{#if preview.steps.length > 0}
-			<ol class="steps" aria-label="Chain steps">
-				{#each preview.steps as step (step.step)}
-					<li class="step">
-						<p class="equation">
-							<span>{name(step.a)}</span>
-							<span class="op">+</span>
-							<span>{name(step.b)}</span>
-							<span class="op">→</span>
-							<strong>{name(step.result)}</strong>
-						</p>
-						<p class="gain mono">+{step.points} points · +{step.heat} heat</p>
-					</li>
-				{/each}
-			</ol>
-		{:else}
-			<p class="quiet">No fusion. The tile just sits there.</p>
-		{/if}
+	{#if preview.steps.length > 0}
+		<ol class="steps" aria-label="Chain steps">
+			{#each preview.steps as step (step.step)}
+				<li class="step">
+					<p class="equation">
+						<span>{name(step.a)}</span>
+						<span class="op">+</span>
+						<span>{name(step.b)}</span>
+						<span class="op">→</span>
+						<strong>{name(step.result)}</strong>
+					</p>
+					<p class="gain mono">+{step.points} points · +{step.heat} heat</p>
 
-		<dl class="outcome">
-			<div>
-				<dt>Result</dt>
-				<dd data-testid="preview-result">{name(result)}</dd>
-			</div>
-			<div>
-				<dt>Score gain</dt>
-				<dd class="mono" data-testid="preview-score">+{preview.scoreGain}</dd>
-			</div>
-			<div>
-				<dt>Heat after turn</dt>
-				<dd class="mono" data-testid="preview-heat">{preview.heatAfterTurn} / {heatCap}</dd>
-				<dd class="detail mono" data-testid="preview-chain-heat">
-					chain {preview.heatAfter} +{PASSIVE_HEAT} passive
-				</dd>
-			</div>
-		</dl>
+					<div class="options" role="group" aria-label={`Step ${step.step} fusion choice`}>
+						{#each step.options as option, optionIndex (option.cell)}
+							<button
+								type="button"
+								class="option"
+								class:chosen={step.choice === optionIndex}
+								aria-pressed={step.choice === optionIndex}
+								data-testid={`preview-option-${step.step}-${optionIndex}`}
+								onclick={() => onChoose?.(step.step - 1, optionIndex)}
+							>
+								<span>{name(option.other)} <span class="op">→</span> {name(option.result)}</span>
+								<span class="option-score mono">+{option.points} · +{option.heat} heat</span>
+							</button>
+						{/each}
+					</div>
+				</li>
+			{/each}
+		</ol>
+	{:else}
+		<p class="quiet">No fusion. The tile just sits there.</p>
+	{/if}
 
-		{#if preview.overloadAfterTurn}
-			<p class="warning" role="alert">
-				{#if preview.overload}
-					Overload! This placement ends the run.
-				{:else}
-					Overload! The +{PASSIVE_HEAT} passive Heat ends the run.
-				{/if}
-			</p>
-		{/if}
+	<dl class="outcome">
+		<div>
+			<dt>Result</dt>
+			<dd data-testid="preview-result">{name(result)}</dd>
+		</div>
+		<div>
+			<dt>Score gain</dt>
+			<dd class="mono" data-testid="preview-score">+{preview.scoreGain}</dd>
+		</div>
+		<div>
+			<dt>Heat after turn</dt>
+			<dd class="mono" data-testid="preview-heat">{preview.heatAfterTurn} / {heatCap}</dd>
+			<dd class="detail mono" data-testid="preview-chain-heat">
+				chain {preview.heatAfter} +{PASSIVE_HEAT} passive
+			</dd>
+		</div>
+	</dl>
 
+	{#if preview.overloadAfterTurn}
+		<p class="warning" role="alert">
+			{#if preview.overload}
+				Overload! This placement ends the run.
+			{:else}
+				Overload! The +{PASSIVE_HEAT} passive Heat ends the run.
+			{/if}
+		</p>
+	{/if}
+
+	{#if mode === 'drag'}
+		<p class="release mono">Release over a cell to place · swipe down to cancel</p>
+	{:else}
 		<div class="actions">
 			<button class="confirm" type="button" onclick={onConfirm}>Confirm</button>
 			<button type="button" onclick={onCancel}>Cancel</button>
 		</div>
+	{/if}
+{/snippet}
+
+{#if mode === 'modal'}
+	<div class="backdrop">
+		<div
+			class="panel"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Placement preview"
+			use:trapFocus={{ onEscape: onCancel }}
+		>
+			{@render body()}
+		</div>
 	</div>
-</div>
+{:else}
+	<div class="dock" data-mode={mode}>
+		<div class="panel inline" role="dialog" aria-modal="false" aria-label="Placement preview">
+			{@render body()}
+		</div>
+	</div>
+{/if}
 
 <style>
 	.backdrop {
@@ -169,6 +210,63 @@
 	}
 
 	.op {
+		color: var(--muted);
+	}
+
+	.options {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+		margin-top: 8px;
+	}
+
+	.option {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+		min-height: 44px;
+		padding: 6px 10px;
+		font-size: 11px;
+		text-align: left;
+		color: var(--text);
+		background: rgba(56, 225, 255, 0.04);
+		border: 1px solid rgba(56, 225, 255, 0.25);
+		border-radius: 6px;
+	}
+
+	.option.chosen {
+		color: var(--void);
+		background: var(--cyan);
+		border-color: var(--cyan);
+	}
+
+	.option.chosen .op,
+	.option.chosen .option-score {
+		color: rgba(3, 16, 24, 0.7);
+	}
+
+	.option-score {
+		font-size: 9px;
+		color: var(--muted);
+	}
+
+	.dock {
+		position: relative;
+		z-index: 1;
+	}
+
+	.dock .panel.inline {
+		width: 100%;
+		max-height: none;
+		padding: 14px;
+		border-color: rgba(56, 225, 255, 0.45);
+		box-shadow: none;
+	}
+
+	.release {
+		margin: 12px 0 0;
+		font-size: 10px;
 		color: var(--muted);
 	}
 

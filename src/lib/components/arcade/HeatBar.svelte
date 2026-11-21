@@ -23,6 +23,7 @@
 		class="track"
 		role="meter"
 		aria-label="Heat"
+		aria-live="polite"
 		aria-valuemin="0"
 		aria-valuemax={cap}
 		aria-valuenow={heat}

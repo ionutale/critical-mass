@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { dragTile, swipeGestures } from '../../actions/arcadeDrag';
 	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import type { ElementSymbol } from '../../types';
 
@@ -6,13 +7,28 @@
 		grid,
 		targets = null,
 		disabled = false,
-		onCell
+		onCell,
+		ghost = null,
+		previewCell = null,
+		onSwipeUp,
+		onSwipeDown,
+		onScrapTile
 	}: {
 		grid: readonly (ElementSymbol | null)[];
 		/** Empty cells that a selected card could land on. */
 		targets?: readonly number[] | null;
 		disabled?: boolean;
 		onCell?: (cell: number) => void;
+		/** Keyboard ghost cursor. */
+		ghost?: number | null;
+		/** Cell currently driving the live preview. */
+		previewCell?: number | null;
+		/** Swipe up on the reactor (not on a tile). */
+		onSwipeUp?: () => void;
+		/** Swipe down on the reactor. */
+		onSwipeDown?: () => void;
+		/** A placed tile was dragged off its cell. */
+		onScrapTile?: (cell: number) => void;
 	} = $props();
 
 	const CELL_COUNT = 25;
@@ -20,19 +36,39 @@
 	const targetSet = $derived(new Set(targets ?? []));
 </script>
 
-<div class="board" role="group" aria-label="Reactor board">
+<div
+	class="board"
+	role="group"
+	aria-label="Reactor board"
+	use:swipeGestures={{ disabled, onSwipeUp, onSwipeDown }}
+>
 	{#each Array.from({ length: CELL_COUNT }, (_, cell) => cell) as cell (cell)}
 		{@const tile = grid[cell] ?? null}
 		{@const record = tile ? ELEMENT_BY_SYMBOL.get(tile) : undefined}
+		{@const isGhost = ghost === cell}
+		{@const isPreview = previewCell === cell}
 		<button
 			type="button"
 			class="cell"
 			class:filled={tile !== null}
 			class:target={targetSet.has(cell)}
-			aria-label={record
-				? `cell ${cell}, ${record.name}, valence ${record.valence}, mass ${record.mass}`
-				: `cell ${cell}, empty`}
+			class:ghost={isGhost}
+			class:previewing={isPreview}
+			data-cell={cell}
+			data-filled={tile !== null ? 'true' : undefined}
+			data-ghost={isGhost ? 'true' : undefined}
+			aria-label={`${
+				record
+					? `cell ${cell}, ${record.name}, valence ${record.valence}, mass ${record.mass}`
+					: `cell ${cell}, empty`
+			}${isGhost ? ', keyboard target' : isPreview ? ', preview target' : ''}`}
 			{disabled}
+			use:dragTile={{
+				cell,
+				symbol: tile,
+				disabled: disabled || tile === null,
+				onScrap: (target: number) => onScrapTile?.(target)
+			}}
 			onclick={() => onCell?.(cell)}
 		>
 			{#if tile && record}
@@ -57,6 +93,8 @@
 		border: 1px solid var(--line);
 		border-radius: 12px;
 		box-shadow: inset 0 0 26px rgba(56, 225, 255, 0.05);
+		/* The reactor is a gesture surface: swipes must not scroll the page. */
+		touch-action: none;
 	}
 
 	.cell {
@@ -92,6 +130,23 @@
 		box-shadow:
 			inset 0 0 18px rgba(255, 179, 71, 0.3),
 			0 0 14px rgba(255, 179, 71, 0.28);
+	}
+
+	.cell.previewing {
+		background: rgba(182, 255, 92, 0.09);
+		border-style: solid;
+		border-color: var(--lime);
+		box-shadow:
+			0 0 0 1px var(--lime),
+			0 0 16px rgba(182, 255, 92, 0.32);
+	}
+
+	.cell.ghost {
+		border-style: solid;
+		border-color: var(--cyan);
+		box-shadow:
+			0 0 0 2px var(--cyan),
+			0 0 20px rgba(56, 225, 255, 0.45);
 	}
 
 	.cell:disabled {

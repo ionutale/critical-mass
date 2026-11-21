@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { firstEmptyCell, stepCell } from '../../actions/arcadeDrag';
+	import type { DragPlacementHandlers } from '../../actions/arcadeDrag';
+	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import { previewPlacement } from '../../game/arcade/fusion';
-	import type { PlacementPreview } from '../../game/arcade/fusion';
 	import { scrapLimit } from '../../game/arcade/turn';
 	import { locked, place, run, save, scrap, stabilize } from '../../stores/arcade';
 	import Board from './Board.svelte';
@@ -8,34 +10,78 @@
 	import HeatBar from './HeatBar.svelte';
 	import PreviewPanel from './PreviewPanel.svelte';
 	import ScoreDisplay from './ScoreDisplay.svelte';
+	import StabilizePicker from './StabilizePicker.svelte';
 
 	type Mode = 'place' | 'stabilize' | 'scrap';
 
 	let selected = $state<number | null>(null);
+	/** Card held by a pointer drag, separate from the tap selection. */
+	let dragIndex = $state<number | null>(null);
+	/** Cell under the pointer, or the keyboard ghost. */
 	let targetCell = $state<number | null>(null);
-	let preview = $state<PlacementPreview | null>(null);
+	/** Keyboard ghost cursor; non-null only on the keyboard path. */
+	let ghost = $state<number | null>(null);
+	/** Per-step branch choices, indexed by 0-based chain step. */
+	let choices = $state<number[]>([]);
 	let mode = $state<Mode>('place');
+	let pickerOpen = $state(false);
 
-	const selectedCard = $derived(selected !== null ? ($run?.hand[selected] ?? null) : null);
-	const handEmpty = $derived(!$run || $run.hand.length === 0);
+	const hand = $derived($run?.hand ?? []);
+	const activeIndex = $derived(dragIndex ?? selected);
+	const activeCard = $derived(activeIndex === null ? null : (hand[activeIndex] ?? null));
+	const preview = $derived.by(() => {
+		if (!$run || activeIndex === null || targetCell === null) return null;
+		return previewPlacement($run, activeIndex, targetCell, choices);
+	});
+	const handEmpty = $derived(hand.length === 0);
 	const scrapsSpent = $derived(!$run || $run.scrapsUsed >= scrapLimit($run));
 	const targets = $derived.by(() => {
-		if (selected === null || !$run) return null;
+		if (activeIndex === null || !$run) return null;
 		return $run.grid.flatMap((tile, cell) => (tile === null ? [cell] : []));
 	});
-	const hint = $derived(
-		mode === 'stabilize'
-			? 'Choose a card to Stabilize.'
-			: mode === 'scrap'
-				? 'Choose a placed tile to Scrap.'
-				: selected !== null
-					? 'Choose an empty cell.'
-					: 'Choose a card.'
-	);
+	const resultName = $derived.by(() => {
+		if (!preview || targetCell === null || !activeCard) return '';
+		const tile = preview.grid[targetCell] ?? activeCard;
+		return ELEMENT_BY_SYMBOL.get(tile)?.name ?? tile;
+	});
+	const hint = $derived.by(() => {
+		if (mode === 'stabilize') return 'Choose a card to Stabilize.';
+		if (mode === 'scrap') return 'Choose a placed tile to Scrap.';
+		if (preview && targetCell !== null) {
+			const overload = preview.overloadAfterTurn ? ', overload' : '';
+			return `Preview: ${resultName}, +${preview.scoreGain} points, heat ${preview.heatAfterTurn} of ${$run?.heatCap ?? 0}${overload}.`;
+		}
+		if (dragIndex !== null) return 'Drag onto an empty cell to place.';
+		if (selected !== null) return 'Choose an empty cell, or use the arrow keys.';
+		return 'Choose a card.';
+	});
+
+	function clearPlacement(): void {
+		targetCell = null;
+		ghost = null;
+		choices = [];
+	}
+
+	function finishTurn(): void {
+		selected = null;
+		dragIndex = null;
+		clearPlacement();
+		mode = 'place';
+	}
 
 	function resetPreview(): void {
-		preview = null;
-		targetCell = null;
+		clearPlacement();
+	}
+
+	function cancelPlacement(): void {
+		dragIndex = null;
+		clearPlacement();
+	}
+
+	function cancelAll(): void {
+		selected = null;
+		pickerOpen = false;
+		finishTurn();
 	}
 
 	function chooseCard(index: number): void {
@@ -43,9 +89,7 @@
 
 		if (mode === 'stabilize') {
 			stabilize(index);
-			mode = 'place';
-			selected = null;
-			resetPreview();
+			finishTurn();
 			return;
 		}
 
@@ -67,10 +111,95 @@
 
 		if (selected === null || state.grid[cell] != null) return;
 
-		const next = previewPlacement(state, selected, cell);
-		if (!next) return;
-		preview = next;
+		ghost = null;
+		if (cell !== targetCell) choices = [];
 		targetCell = cell;
+	}
+
+	/** Commit the play already shown by the live preview, with the same `choices`. */
+	function commitPlacement(index: number, cell: number): void {
+		const state = $run;
+		if (!state || $locked || state.grid[cell] != null) {
+			cancelPlacement();
+			return;
+		}
+
+		if (cell !== targetCell) {
+			targetCell = cell;
+			choices = [];
+		}
+
+		const committedChoices = choices;
+		if (!previewPlacement(state, index, cell, committedChoices)) {
+			cancelPlacement();
+			return;
+		}
+
+		place(index, cell, committedChoices);
+		finishTurn();
+	}
+
+	function confirm(): void {
+		if (activeIndex === null || targetCell === null) return;
+		commitPlacement(activeIndex, targetCell);
+	}
+
+	function chooseOption(step: number, option: number): void {
+		if (!$run || $locked) return;
+		// Rebuilding the prefix keeps earlier branches and drops stale later ones.
+		const next = Array.from({ length: step + 1 }, (_, index) => choices[index] ?? 0);
+		next[step] = option;
+		choices = next;
+	}
+
+	const dragHandlers: DragPlacementHandlers = {
+		begin(index) {
+			if ($locked) return;
+			dragIndex = index;
+			mode = 'place';
+			ghost = null;
+			targetCell = null;
+			choices = [];
+		},
+		hover(cell) {
+			if (dragIndex === null) return;
+			if (cell === null || !$run || $run.grid[cell] != null) {
+				targetCell = null;
+				choices = [];
+				return;
+			}
+			if (cell !== targetCell) {
+				targetCell = cell;
+				choices = [];
+			}
+		},
+		commit(index, cell) {
+			commitPlacement(index, cell);
+		},
+		cancel() {
+			cancelPlacement();
+		}
+	};
+
+	function scrapTile(cell: number): void {
+		if (!$run || $locked || scrapsSpent) return;
+		scrap(cell);
+		mode = 'place';
+		selected = null;
+		clearPlacement();
+	}
+
+	function openStabilizePicker(): void {
+		if (!$run || $locked || handEmpty) return;
+		clearPlacement();
+		pickerOpen = true;
+	}
+
+	function pickStabilize(index: number): void {
+		pickerOpen = false;
+		if (!$run || $locked) return;
+		stabilize(index);
+		finishTurn();
 	}
 
 	function toggleStabilize(): void {
@@ -78,9 +207,7 @@
 
 		if (selected !== null) {
 			stabilize(selected);
-			mode = 'place';
-			selected = null;
-			resetPreview();
+			finishTurn();
 			return;
 		}
 
@@ -94,17 +221,68 @@
 		resetPreview();
 	}
 
-	function confirm(): void {
-		if (!$run || $locked || selected === null || targetCell === null) return;
-		place(selected, targetCell);
-		mode = 'place';
-		selected = null;
-		resetPreview();
+	function cancel(): void {
+		cancelAll();
 	}
 
-	function cancel(): void {
-		resetPreview();
+	function isArrow(key: string): boolean {
+		return key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight';
 	}
+
+	/**
+	 * Keyboard parity: the focused card owns a ghost on the board. Arrows move
+	 * it (skipping tiles), Enter/Space commits the same preview, Escape cancels.
+	 */
+	function onCardKey(event: KeyboardEvent, index: number): void {
+		const state = $run;
+		if (!state || $locked || mode !== 'place') return;
+
+		if (event.key === 'Escape') {
+			if (targetCell !== null || ghost !== null || dragIndex !== null) {
+				event.preventDefault();
+				cancel();
+			}
+			return;
+		}
+
+		if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+			if (selected === index && targetCell !== null && preview) {
+				event.preventDefault();
+				commitPlacement(index, targetCell);
+			}
+			return;
+		}
+
+		if (!isArrow(event.key)) return;
+		event.preventDefault();
+
+		if (selected !== index) {
+			selected = index;
+			ghost = firstEmptyCell(state.grid);
+			targetCell = ghost;
+			choices = [];
+		}
+
+		const from = ghost ?? firstEmptyCell(state.grid);
+		if (from === null) {
+			ghost = null;
+			targetCell = null;
+			return;
+		}
+
+		const next = stepCell(from, event.key, state.grid) ?? from;
+		ghost = next;
+		targetCell = next;
+		if (next !== from) choices = [];
+	}
+
+	const previewMode = $derived(
+		dragIndex !== null
+			? ('drag' as const)
+			: ghost !== null
+				? ('keyboard' as const)
+				: ('modal' as const)
+	);
 </script>
 
 {#if $run}
@@ -120,9 +298,32 @@
 
 		<HeatBar heat={$run.heat} cap={$run.heatCap} />
 
-		<p class="hint" role="status">{hint}</p>
+		<p class="hint" role="status" aria-live="polite" data-testid="preview-live">{hint}</p>
 
-		<Board grid={$run.grid} {targets} disabled={$locked} onCell={chooseCell} />
+		<Board
+			grid={$run.grid}
+			{targets}
+			{ghost}
+			previewCell={targetCell}
+			disabled={$locked}
+			onCell={chooseCell}
+			onSwipeUp={openStabilizePicker}
+			onSwipeDown={cancel}
+			onScrapTile={scrapTile}
+		/>
+
+		{#if preview && activeCard && targetCell !== null}
+			<PreviewPanel
+				{preview}
+				card={activeCard}
+				cell={targetCell}
+				heatCap={$run.heatCap}
+				mode={previewMode}
+				onChoose={chooseOption}
+				onConfirm={confirm}
+				onCancel={cancel}
+			/>
+		{/if}
 
 		<div class="actions">
 			<button
@@ -147,7 +348,14 @@
 			</button>
 		</div>
 
-		<Hand cards={$run.hand} {selected} disabled={$locked} onSelect={chooseCard} />
+		<Hand
+			cards={$run.hand}
+			{selected}
+			disabled={$locked}
+			onSelect={chooseCard}
+			drag={dragHandlers}
+			onKeyDown={onCardKey}
+		/>
 
 		<p class="counts mono">DECK {$run.deck.length} · DISCARD {$run.discard.length}</p>
 
@@ -156,15 +364,8 @@
 		{/if}
 	</main>
 
-	{#if preview && selectedCard && targetCell !== null}
-		<PreviewPanel
-			{preview}
-			card={selectedCard}
-			cell={targetCell}
-			heatCap={$run.heatCap}
-			onConfirm={confirm}
-			onCancel={cancel}
-		/>
+	{#if pickerOpen}
+		<StabilizePicker cards={$run.hand} onPick={pickStabilize} onCancel={cancel} />
 	{/if}
 {/if}
 
