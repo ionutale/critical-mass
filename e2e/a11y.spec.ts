@@ -11,8 +11,8 @@ test.beforeEach(async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 });
 
-async function axeIsClean(page: Page): Promise<void> {
-	await page.waitForTimeout(250);
+async function axeIsClean(page: Page, wait = 250): Promise<void> {
+	await page.waitForTimeout(wait);
 	const results = await new AxeBuilder({ page }).analyze();
 	expect(results.violations.map((violation) => violation.id)).toEqual([]);
 }
@@ -73,6 +73,28 @@ test('title and how-to have no axe violations', async ({ page }) => {
 	await page.getByRole('button', { name: /how to play/i }).click();
 	await expect(page.getByRole('heading', { name: /how to play/i })).toBeVisible();
 	await axeIsClean(page);
+});
+
+test('settings, unlocks, and how-to are axe-clean with motion enabled', async ({ page }) => {
+	// The other audits force reduced motion; these screens must also pass while
+	// their entrances and ambient animation are live.
+	await page.emulateMedia({ reducedMotion: 'no-preference' });
+	await seed(page);
+	await page.goto('/');
+
+	await page.getByRole('button', { name: /^settings/i }).click();
+	await expect(page.getByRole('heading', { name: /^settings$/i })).toBeVisible();
+	await axeIsClean(page, 400);
+
+	await page.getByRole('button', { name: /back to title/i }).click();
+	await page.getByRole('button', { name: /^unlocks/i }).click();
+	await expect(page.getByRole('heading', { name: /^unlocks$/i })).toBeVisible();
+	await axeIsClean(page, 400);
+
+	await page.getByRole('button', { name: /back to title/i }).click();
+	await page.getByRole('button', { name: /how to play/i }).click();
+	await expect(page.getByRole('heading', { name: /how to play/i })).toBeVisible();
+	await axeIsClean(page, 400);
 });
 
 test('run screen has no axe violations', async ({ page }) => {
