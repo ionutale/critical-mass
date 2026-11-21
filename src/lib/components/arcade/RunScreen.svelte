@@ -53,7 +53,6 @@
 		if (!$run || activeIndex === null || targetCell === null) return null;
 		return previewPlacement($run, activeIndex, targetCell, choices);
 	});
-	const handEmpty = $derived(hand.length === 0);
 	const scrapsSpent = $derived(!$run || $run.scrapsUsed >= scrapLimit($run));
 	/** Playback markers: no playback means no `data-motion` attribute at all. */
 	const scoreMotion = $derived(
@@ -120,6 +119,16 @@
 		}
 
 		stabilize(handIndex);
+	}
+
+	/**
+	 * Stabilize without a card: an empty hand is a pure pass, so the run can
+	 * still advance into Overload instead of dead-locking. No picker opens.
+	 */
+	function stabilizePass(): void {
+		if (!$run || $locked) return;
+		stabilize(0);
+		finishTurn();
 	}
 
 	function cancelPlacement(): void {
@@ -275,8 +284,12 @@
 	}
 
 	function openStabilizePicker(): void {
-		if (!$run || $locked || handEmpty) return;
+		if (!$run || $locked) return;
 		clearPlacement();
+		if ($run.hand.length === 0) {
+			stabilizePass();
+			return;
+		}
 		pickerOpen = true;
 	}
 
@@ -288,7 +301,12 @@
 	}
 
 	function toggleStabilize(): void {
-		if (!$run || $locked || handEmpty) return;
+		if (!$run || $locked) return;
+
+		if ($run.hand.length === 0) {
+			stabilizePass();
+			return;
+		}
 
 		if (selected !== null) {
 			commitStabilize(selected);
@@ -443,7 +461,7 @@
 				class="action"
 				class:active={mode === 'stabilize'}
 				aria-pressed={mode === 'stabilize'}
-				disabled={$locked || handEmpty}
+				disabled={$locked}
 				onclick={toggleStabilize}
 			>
 				Stabilize

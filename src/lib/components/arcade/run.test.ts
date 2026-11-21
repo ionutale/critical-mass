@@ -338,11 +338,42 @@ describe('run screen', () => {
 		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
 	});
 
-	it('disables Stabilize with an empty hand', () => {
-		initGame({ run: arcadeRun({ hand: [] }) });
+	it('allows Stabilize as a pure pass with an empty hand', async () => {
+		initGame({ run: arcadeRun({ hand: [], deck: [], discard: [], heat: 20, turn: 5 }) });
 		render(RunScreen);
 
-		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
+		const stabilize = screen.getByRole('button', { name: /stabilize/i });
+		expect(stabilize).toBeEnabled();
+
+		await fireEvent.click(stabilize);
+
+		// No picker and no discard: just the passive Heat and the next turn.
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(20 + PASSIVE_HEAT)
+		);
+		expect(screen.getByText(/TURN 6/)).toBeInTheDocument();
+		expect(stabilize).toBeEnabled();
+	});
+
+	it('reaches Overload from an empty hand by passing', async () => {
+		initGame({
+			run: arcadeRun({
+				hand: [],
+				deck: [],
+				discard: [],
+				heat: 96,
+				turn: 23,
+				milestonesCrossed: 3
+			})
+		});
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /stabilize/i }));
+
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '100');
+		expect(screen.getByRole('dialog', { name: /run over/i })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /stabilize/i })).toBeDisabled();
 	});
 
@@ -1145,8 +1176,8 @@ describe('run screen swipes', () => {
 		);
 	});
 
-	it('does not open the Stabilize picker with an empty hand', async () => {
-		initGame({ run: arcadeRun({ hand: [] }) });
+	it('swipe up with an empty hand passes the turn instead of opening the picker', async () => {
+		initGame({ run: arcadeRun({ hand: [], deck: [], discard: [], heat: 20, turn: 5 }) });
 		render(RunScreen);
 
 		const empty = screen.getByRole('button', { name: /^cell 0,/i });
@@ -1154,6 +1185,11 @@ describe('run screen swipes', () => {
 		await fireEvent.pointerUp(empty, { ...STABILIZE_DELTA, clientY: 240 });
 
 		expect(screen.queryByRole('dialog', { name: /^stabilize/i })).not.toBeInTheDocument();
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(20 + PASSIVE_HEAT)
+		);
+		expect(screen.getByText(/TURN 6/)).toBeInTheDocument();
 	});
 
 	it('swipe down on the reactor cancels the current selection', async () => {

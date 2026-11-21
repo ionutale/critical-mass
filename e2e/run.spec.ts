@@ -159,6 +159,33 @@ test('a mid-run reload keeps the board, score, heat, and turn', async ({ page })
 	await expect(page.getByRole('button', { name: /card 1, Li Lithium/i })).toBeVisible();
 });
 
+test('an empty hand can still Stabilize into Overload', async ({ page }) => {
+	// Five Stabilizes with a card in hand empty the hand without drawing. Before
+	// the fix, handEmpty disabled Stabilize and no card could be placed, so the
+	// run could never advance or overload.
+	await seedRun(page, {
+		grid: gridWith({ 0: 'H' }),
+		hand: [],
+		deck: [],
+		discard: [],
+		heat: 96,
+		turn: 23,
+		milestonesCrossed: 3
+	});
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+
+	const stabilize = page.getByRole('button', { name: /^stabilize$/i });
+	await expect(stabilize).toBeEnabled();
+	await stabilize.click();
+
+	// A pure pass: no picker, only the passive Heat, straight into Overload.
+	await expect(page.getByRole('dialog', { name: /^stabilize$/i })).toHaveCount(0);
+	await expect(page.getByRole('meter', { name: 'Heat' })).toHaveAttribute('aria-valuenow', '100');
+	await expect(page.getByRole('dialog', { name: /run over/i })).toBeVisible();
+	await expect(page.getByTestId('runs')).toHaveText('1');
+});
+
 test('Stabilize cools the reactor and Scrap clears one tile for free', async ({ page }) => {
 	await seedRun(page, {
 		grid: gridWith({ 0: 'H' }),
