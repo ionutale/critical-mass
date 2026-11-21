@@ -3,6 +3,7 @@ import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 import type { ElementSymbol } from '../../types';
 import { previewPlacement } from './fusion';
 import { chooseUpgrade } from './draft';
+import { PASSIVE_HEAT } from './heat';
 import {
 	applyHeat,
 	createRun,
@@ -221,13 +222,13 @@ describe('initial run state', () => {
 });
 
 describe('placeCard turn resolution', () => {
-	it('resolves the chain, then adds +3, draws to 5, and resets scrapsUsed', () => {
+	it('resolves the chain, then adds passive Heat, draws to 5, and resets scrapsUsed', () => {
 		const run = chainRun({ scrapsUsed: 1 });
 
 		const after = placeCard(run, 0, CENTER);
 
-		// Chain: He (2) + C (4) + Ne (5) = 11 heat, 20 score; then end-of-turn +3.
-		expect(after.heat).toBe(14);
+		// Chain: He (2) + C (4) + Ne (5) = 11 heat, 20 score; then the passive Heat.
+		expect(after.heat).toBe(11 + PASSIVE_HEAT);
 		expect(after.score).toBe(20);
 		expect(after.bestChain).toBe(3);
 		expect(after.turn).toBe(run.turn + 1);
@@ -272,7 +273,7 @@ describe('placeCard turn resolution', () => {
 		expect(after.turn).toBe(run.turn);
 	});
 
-	it('overloads when the end-of-turn +3 crosses the cap', () => {
+	it('overloads when the end-of-turn passive Heat crosses the cap', () => {
 		const run = chainRun({ grid: buildGrid(), heat: 98 });
 		const preview = previewPlacement(run, 0, CENTER)!;
 		expect(preview.overload).toBe(false);
@@ -311,36 +312,36 @@ describe('placeCard turn resolution', () => {
 });
 
 describe('stabilize', () => {
-	it('discards a card, cools 15, adds +3, and does not draw', () => {
+	it('discards a card, cools 15, adds passive Heat, and does not draw', () => {
 		const run = chainRun({ turn: 10, heat: 70, discard: ['Be'], scrapsUsed: 1 });
 
 		const after = stabilize(run, 2);
 
 		expect(after.hand).toEqual(['H', 'Li', 'Be', 'Na']);
 		expect(after.discard).toEqual(['Be', 'He']);
-		expect(after.heat).toBe(70 - 15 + 3);
+		expect(after.heat).toBe(70 - 15 + PASSIVE_HEAT);
 		expect(after.turn).toBe(11);
 		expect(after.deck).toEqual(run.deck);
 		expect(after.hand).toHaveLength(4);
 		expect(after.scrapsUsed).toBe(0);
 	});
 
-	it('cools only down to 3 × the current turn', () => {
+	it('cools only down to the rising passive floor', () => {
 		const run = chainRun({ turn: 10, heat: 35 });
 
 		const after = stabilize(run, 0);
 
-		expect(heatFloor(run)).toBe(30);
-		expect(after.heat).toBe(30 + 3);
+		expect(heatFloor(run)).toBe(PASSIVE_HEAT * 10);
+		expect(after.heat).toBe(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
 	});
 
-	it('is a pure pass when the hand is empty: +3, no cooling, no draw', () => {
+	it('is a pure pass when the hand is empty: passive Heat, no cooling, no draw', () => {
 		const run = chainRun({ turn: 5, heat: 40, hand: [], deck: ['H'] });
 
 		const after = stabilize(run, 0);
 
 		expect(after.turn).toBe(6);
-		expect(after.heat).toBe(43);
+		expect(after.heat).toBe(40 + PASSIVE_HEAT);
 		expect(after.hand).toEqual([]);
 		expect(after.deck).toEqual(['H']);
 		expect(after.discard).toEqual(run.discard);
@@ -411,13 +412,13 @@ describe('scrap', () => {
 });
 
 describe('endTurn', () => {
-	it('advances the turn, adds +3, and resets scrapsUsed', () => {
+	it('advances the turn, adds passive Heat, and resets scrapsUsed', () => {
 		const run = chainRun({ scrapsUsed: 1, heat: 10 });
 
 		const after = endTurn(run);
 
 		expect(after.turn).toBe(run.turn + 1);
-		expect(after.heat).toBe(13);
+		expect(after.heat).toBe(10 + PASSIVE_HEAT);
 		expect(after.scrapsUsed).toBe(0);
 	});
 
@@ -485,12 +486,12 @@ describe('milestones', () => {
 		expect(reheated.pendingDrafts).toBe(2);
 	});
 
-	it('queues a draft when the end-of-turn +3 crosses 25', () => {
-		const run = chainRun({ grid: buildGrid(), heat: 23 });
+	it('queues a draft when the end-of-turn passive Heat crosses 25', () => {
+		const run = chainRun({ grid: buildGrid(), heat: 25 - PASSIVE_HEAT });
 
 		const after = placeCard(run, 0, CENTER);
 
-		expect(after.heat).toBe(26);
+		expect(after.heat).toBe(25);
 		expect(after.pendingDrafts).toBe(1);
 	});
 });

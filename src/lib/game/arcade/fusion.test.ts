@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ElementSymbol } from '../../types';
 import { previewPlacement, resolvePlacement } from './fusion';
+import { PASSIVE_HEAT } from './heat';
 import type { FusionState } from './types';
 
 const CENTER = 12;
@@ -280,12 +281,12 @@ describe('resolvePlacement chains and scoring', () => {
 		expect(preview.heatGain).toBe(result.heatGain);
 		expect(preview.heatAfter).toBe(51);
 		expect(preview.overload).toBe(false);
-		expect(preview.heatAfterTurn).toBe(54);
+		expect(preview.heatAfterTurn).toBe(51 + PASSIVE_HEAT);
 		expect(preview.overloadAfterTurn).toBe(false);
 	});
 
-	it('reports the post-turn heat and overload after the passive +3', () => {
-		// 86 + 11 chain Heat = 97, so only the end-of-turn +3 reaches the cap.
+	it('reports the post-turn heat and overload after the passive Heat', () => {
+		// 86 + 11 chain Heat = 97, so only the end-of-turn passive Heat reaches the cap.
 		const boundary = previewPlacement(chainRun({ heat: 86 }), 0, CENTER, [1, 1, 0])!;
 		expect(boundary.heatAfter).toBe(97);
 		expect(boundary.overload).toBe(false);

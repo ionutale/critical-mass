@@ -1,4 +1,8 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { runBalance } from '../../../../scripts/balance';
 import {
 	checkBands,
 	casualPlay,
@@ -53,7 +57,7 @@ describe('planner policy', () => {
 		expect(result.stalled).toBe(false);
 	});
 
-	it('lands in the target turn band', () => {
+	it('lands in the target turn band without a harness sprint', () => {
 		const turns = resultsFor(plannerPlay).map((result) => result.turns);
 
 		expect(median(turns)).toBeGreaterThanOrEqual(DEFAULT_BANDS.targetMinTurns);
@@ -62,6 +66,19 @@ describe('planner policy', () => {
 			expect(turn).toBeGreaterThanOrEqual(DEFAULT_BANDS.minTurns);
 			expect(turn).toBeLessThanOrEqual(DEFAULT_BANDS.maxTurns);
 		}
+	});
+
+	it('ends runs at the engine clock, never past the floor-only cap', () => {
+		const planner = resultsFor(plannerPlay);
+		const floorOnly = resultsFor(stabilizeOnlyPlay);
+		const naturalCap = Math.max(...floorOnly.map((result) => result.turns));
+
+		for (const result of planner) {
+			expect(result.turns).toBeLessThanOrEqual(naturalCap);
+		}
+		expect(Math.min(...planner.map((result) => result.turns))).toBeGreaterThanOrEqual(
+			DEFAULT_BANDS.targetMinTurns
+		);
 	});
 
 	it('finds at least two upgrade paths across seeds', () => {
@@ -155,6 +172,89 @@ describe('checkBands', () => {
 		expect(check.ok).toBe(false);
 		expect(check.failures.some((failure) => failure.includes('score'))).toBe(true);
 	});
+
+	it('fails when the casual baseline is empty', () => {
+		const suite = healthySuite();
+		const check = checkBands({ ...suite, casual: [] });
+
+		expect(check.ok).toBe(false);
+		expect(check.failures).toContain('casual produced no runs');
+	});
+
+	it('fails when the casual median score is zero', () => {
+		const suite = healthySuite();
+		const casual = suite.casual.map((result) => ({ ...result, score: 0 }));
+		const check = checkBands({ ...suite, casual });
+
+		expect(check.ok).toBe(false);
+		expect(check.failures.some((failure) => failure.includes('casual median score is 0'))).toBe(
+			true
+		);
+	});
+});
+
+describe('balance CLI', () => {
+	function capture(): {
+		lines: string[];
+		output: { log: (line: string) => void; error: (line: string) => void };
+	} {
+		const lines: string[] = [];
+		return {
+			lines,
+			output: {
+				log: (line: string) => lines.push(line),
+				error: (line: string) => lines.push(line)
+			}
+		};
+	}
+
+	it('exits 1 on a failing --check', () => {
+		const { lines, output } = capture();
+		const code = runBalance(
+			['--seeds=1', '--check'],
+			{ ...DEFAULT_BANDS, targetMinTurns: 99 },
+			output
+		);
+
+		expect(code).toBe(1);
+		expect(lines.join('\n')).toContain('FAIL planner turns median');
+	});
+
+	it('exits 0 on a passing --check and skips the cross-seed path band for one seed', () => {
+		const { lines, output } = capture();
+		const code = runBalance(['--seeds=1', '--check'], DEFAULT_BANDS, output);
+
+		expect(code).toBe(0);
+		expect(lines.join('\n')).toContain('Bands: PASS');
+	});
+
+	it('states that a plain run is report-only', () => {
+		const { lines, output } = capture();
+		const code = runBalance(['--seeds=1'], { ...DEFAULT_BANDS, targetMinTurns: 99 }, output);
+
+		expect(code).toBe(0);
+		expect(lines.join('\n')).toContain('Bands: FAIL');
+		expect(lines.join('\n')).toContain('Report only: pass --check');
+	});
+
+	it('runs under direct vite-node invocation and exits on the band result', () => {
+		const cli = resolve(process.cwd(), 'node_modules/vite-node/dist/cli.mjs');
+		expect(existsSync(cli)).toBe(true);
+
+		const env = { ...process.env };
+		delete env.VITEST;
+
+		const result = spawnSync(
+			process.execPath,
+			[cli, 'scripts/balance.ts', '--seeds=1', '--check'],
+			{ cwd: process.cwd(), env, encoding: 'utf8', timeout: 30_000 }
+		);
+
+		expect(result.error).toBeUndefined();
+		expect(result.status).toBe(0);
+		expect(result.stdout).toContain('Balance report');
+		expect(result.stdout).toContain('Bands: PASS');
+	}, 30_000);
 });
 
 describe('report', () => {
@@ -165,6 +265,7 @@ describe('report', () => {
 		expect(text).toContain('turns');
 		expect(text).toContain('score');
 		expect(text).toContain('stalls');
+		expect(text).toContain('natural cap');
 		expect(text).toContain('upgrade paths');
 	});
 });

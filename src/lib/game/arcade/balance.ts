@@ -99,8 +99,6 @@ const NEIGHBOURS: readonly (readonly [number, number])[] = [
 ];
 /** Cool before a placement that would leave Heat above this fraction of the cap. */
 const PLANNER_HOT_CEILING = 0.9;
-/** From this turn on the planner spends its remaining Heat on the biggest score. */
-const PLANNER_SPRINT_TURN = 23;
 /** Scrap a terminal tile once the board has this few empty cells. */
 const PLANNER_CROWDED_CELLS = 5;
 
@@ -427,16 +425,6 @@ function plannerStep(run: RunState): RunState {
 
 	const nonLethal = candidates.filter((candidate) => !isLethal(candidate.preview));
 
-	// Late in a run every remaining point matters more than another safe turn:
-	// spend the Heat on the highest-scoring play, even if it ends the run.
-	if (run.turn >= PLANNER_SPRINT_TURN) {
-		const finisher = bestBy(
-			candidates,
-			(candidate) => candidate.preview.scoreGain * 100 + plannerValue(run, candidate.preview)
-		);
-		if (finisher) return placeCard(run, finisher.hand, finisher.cell, finisher.choices);
-	}
-
 	const best = bestBy(nonLethal.length > 0 ? nonLethal : candidates, (candidate) =>
 		plannerValue(run, candidate.preview)
 	);
@@ -578,7 +566,9 @@ export function report(results: BalanceResults, bands: BalanceBands = DEFAULT_BA
 	}
 
 	const check = checkBands(results, bands);
+	const naturalCap = Math.max(0, ...results.stabilizeOnly.map((result) => result.turns));
 	lines.push('');
+	lines.push(`natural cap (stabilize-only max turns): ${naturalCap}`);
 	lines.push(`upgrade paths across planner seeds: ${upgradePaths(results.planner)}`);
 	lines.push(check.ok ? 'Bands: PASS' : `Bands: FAIL — ${check.failures.join('; ')}`);
 
@@ -632,28 +622,38 @@ export function checkBands(
 		}
 
 		const paths = upgradePaths(results.planner);
-		if (paths < bands.minUpgradePaths) {
+		// One seed cannot reach two distinct paths; the band needs at least as
+		// many seeds as it requires paths, so a small `--seeds=1` smoke run is
+		// not failed by an impossible rule.
+		if (results.planner.length >= bands.minUpgradePaths && paths < bands.minUpgradePaths) {
 			failures.push(
 				`upgrade paths ${paths} below minimum ${bands.minUpgradePaths} across planner seeds`
 			);
 		}
-
-		const plannerScore = median(results.planner.map((result) => result.score));
-		const casualScore = median(results.casual.map((result) => result.score));
-		if (casualScore > 0 && plannerScore < casualScore * bands.minScoreRatio) {
-			failures.push(
-				`score spread too small: planner median ${plannerScore} vs casual median ${casualScore} ` +
-					`(need ${bands.minScoreRatio}×)`
-			);
-		}
-		if (casualScore === 0 && plannerScore === 0) {
-			failures.push('score spread absent: both policies scored zero');
-		}
 	}
 
-	const casualStalls = results.casual.filter((result) => result.stalled).length;
-	if (casualStalls > bands.maxStalls) {
-		failures.push(`casual stalls: ${casualStalls} run(s) hit the action cap`);
+	if (results.casual.length === 0) {
+		failures.push('casual produced no runs');
+	} else {
+		const casualStalls = results.casual.filter((result) => result.stalled).length;
+		if (casualStalls > bands.maxStalls) {
+			failures.push(`casual stalls: ${casualStalls} run(s) hit the action cap`);
+		}
+
+		const casualScore = median(results.casual.map((result) => result.score));
+		if (casualScore <= 0) {
+			// A zero baseline would make any planner score pass; that is a broken
+			// harness, not a skill gap.
+			failures.push('casual median score is 0; score spread cannot be measured');
+		} else if (results.planner.length > 0) {
+			const plannerScore = median(results.planner.map((result) => result.score));
+			if (plannerScore <= casualScore * bands.minScoreRatio) {
+				failures.push(
+					`score spread too small: planner median ${plannerScore} vs casual median ${casualScore} ` +
+						`(need > ${bands.minScoreRatio}×)`
+				);
+			}
+		}
 	}
 
 	if (results.stabilizeOnly.length === 0) {

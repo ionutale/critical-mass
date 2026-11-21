@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateDraft } from '../game/arcade/draft';
+import { PASSIVE_HEAT } from '../game/arcade/heat';
 import { createMeta, recordRun } from '../game/arcade/meta';
 import type { SaveState } from '../game/arcade/storage';
 import {
@@ -130,7 +131,7 @@ describe('actions', () => {
 
 		const after = get(run)!;
 		expect(after).toEqual(expected);
-		expect(after.heat).toBe(58);
+		expect(after.heat).toBe(70 - 15 + PASSIVE_HEAT);
 		expect(after.turn).toBe(11);
 		expect(after.hand).toHaveLength(4);
 		expect(stored().run).toEqual(expected);

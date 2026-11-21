@@ -4,6 +4,7 @@ import { mount, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { previewPlacement } from '../../game/arcade/fusion';
+import { PASSIVE_HEAT } from '../../game/arcade/heat';
 import { createRun } from '../../game/arcade/turn';
 import type { RunState } from '../../game/arcade/turn';
 import { initGame, place, save } from '../../stores/arcade';
@@ -48,7 +49,8 @@ function arcadeRun(overrides: Partial<RunState> = {}): RunState {
 		hand: [...FULL_HAND],
 		deck: [...FULL_HAND],
 		discard: [],
-		heat: 10,
+		// Stays below the 25 Heat milestone after a full centre chain + passive Heat.
+		heat: 9,
 		turn: 1,
 		...overrides
 	};
@@ -223,7 +225,7 @@ describe('run screen', () => {
 		expect(screen.getAllByRole('button', { name: /^cell \d+/i })).toHaveLength(25);
 		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('Hydrogen');
 		expect(screen.getByRole('button', { name: /hydrogen card 1/i })).toHaveTextContent('Hydrogen');
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent('0');
 	});
 
@@ -278,7 +280,7 @@ describe('run screen', () => {
 
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 	});
 
 	it('warns when a preview would overload and locks the run after it does', async () => {
@@ -377,7 +379,10 @@ describe('run screen', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /helium card 3/i }));
 
 		expect(screen.queryByRole('button', { name: /helium card/i })).not.toBeInTheDocument();
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '18');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(PASSIVE_HEAT * 5 + PASSIVE_HEAT)
+		);
 		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent('0');
 	});
 });
@@ -468,7 +473,7 @@ describe('run screen drag', () => {
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 		expect(document.querySelector('[data-drag-ghost]')).toBeNull();
 		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 	});
 
 	it('cancels a drag with a downward swipe', async () => {
@@ -498,7 +503,7 @@ describe('run screen drag', () => {
 
 		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('empty');
 		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 	});
 
 	it('commits the identical play under reduced motion', async () => {
@@ -538,7 +543,7 @@ describe('run screen drag', () => {
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
 		expect(screen.getByRole('button', { name: /^cell 18,/i })).toHaveTextContent('empty');
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 	});
 
 	it('hides branch buttons in the drag dock and commits the default preview', async () => {
@@ -742,7 +747,7 @@ describe('run screen keyboard', () => {
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 		expect(document.querySelector('[data-ghost]')).toBeNull();
 		expect(screen.getByRole('button', { name: /^cell 6,/i })).toHaveTextContent('empty');
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 	});
 
 	it('cancels with Escape while focus is inside the preview dock', async () => {
@@ -1129,7 +1134,10 @@ describe('run screen swipes', () => {
 
 		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: /helium card/i })).not.toBeInTheDocument();
-		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '18');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(PASSIVE_HEAT * 5 + PASSIVE_HEAT)
+		);
 	});
 
 	it('does not open the Stabilize picker with an empty hand', async () => {

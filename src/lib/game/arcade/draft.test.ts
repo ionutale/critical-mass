@@ -4,6 +4,7 @@ import type { UpgradeId } from '../../data/upgrades';
 import type { ElementSymbol } from '../../types';
 import { chooseUpgrade, generateDraft, hasUpgrade } from './draft';
 import { previewPlacement, resolvePlacement } from './fusion';
+import { PASSIVE_HEAT } from './heat';
 import { createRun, endTurn, placeCard, scrap, stabilize } from './turn';
 
 const CENTER = 12;
@@ -235,14 +236,14 @@ describe('upgrade effects', () => {
 
 		const cooled = stabilize(base, 0);
 
-		expect(cooled.heat).toBe(70 - 30 + 3);
-		expect(stabilize(chainRun({ turn: 10, heat: 70 }), 0).heat).toBe(70 - 15 + 3);
+		expect(cooled.heat).toBe(70 - 30 + PASSIVE_HEAT);
+		expect(stabilize(chainRun({ turn: 10, heat: 70 }), 0).heat).toBe(70 - 15 + PASSIVE_HEAT);
 	});
 
 	it('coolant still respects the rising heat floor', () => {
 		const base = chainRun({ turn: 10, heat: 35, upgrades: ['coolant'] });
 
-		expect(stabilize(base, 0).heat).toBe(30 + 3);
+		expect(stabilize(base, 0).heat).toBe(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
 	});
 
 	it('efficient reduces every fusion by 1 Heat, never below 1', () => {
