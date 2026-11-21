@@ -148,8 +148,8 @@ describe('board', () => {
 
 		const filled = screen.getByRole('button', { name: /^cell 12/i });
 		expect(filled).toHaveTextContent('Hydrogen');
-		expect(filled).toHaveAttribute('aria-label', expect.stringContaining('valence 1'));
-		expect(filled).toHaveAttribute('aria-label', expect.stringContaining('mass 1'));
+		expect(filled).toHaveAttribute('aria-label', expect.stringContaining('V 1'));
+		expect(filled).toHaveAttribute('aria-label', expect.stringContaining('M 1'));
 		expect(filled).toHaveClass('filled');
 
 		const target = screen.getByRole('button', { name: /^cell 13/i });
@@ -166,14 +166,14 @@ describe('hand', () => {
 		const onSelect = vi.fn();
 		render(Hand, { props: { cards: ['H', 'He'], selected: 1, onSelect } });
 
-		const hydrogen = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const hydrogen = screen.getByRole('button', { name: /card 1,/i });
 		expect(hydrogen).toHaveTextContent('Hydrogen');
 		expect(hydrogen).toHaveTextContent('V 1');
 		expect(hydrogen).toHaveTextContent('M 1');
-		expect(hydrogen).toHaveAttribute('aria-label', expect.stringContaining('valence 1'));
+		expect(hydrogen).toHaveAttribute('aria-label', expect.stringContaining('V 1'));
 		expect(hydrogen).toHaveAttribute('aria-pressed', 'false');
 
-		const helium = screen.getByRole('button', { name: /helium card 2/i });
+		const helium = screen.getByRole('button', { name: /card 2,/i });
 		expect(helium).toHaveAttribute('aria-pressed', 'true');
 
 		await fireEvent.click(hydrogen);
@@ -224,7 +224,7 @@ describe('run screen', () => {
 
 		expect(screen.getAllByRole('button', { name: /^cell \d+/i })).toHaveLength(25);
 		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('Hydrogen');
-		expect(screen.getByRole('button', { name: /hydrogen card 1/i })).toHaveTextContent('Hydrogen');
+		expect(screen.getByRole('button', { name: /card 1,/i })).toHaveTextContent('Hydrogen');
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '9');
 		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent('0');
 	});
@@ -236,7 +236,7 @@ describe('run screen', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 
 		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
@@ -272,7 +272,7 @@ describe('run screen', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 		expect(screen.getByRole('dialog', { name: /placement preview/i })).toBeInTheDocument();
 
@@ -291,7 +291,7 @@ describe('run screen', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 
 		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
@@ -315,7 +315,7 @@ describe('run screen', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 
 		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
@@ -352,7 +352,7 @@ describe('run screen', () => {
 
 		expect(screen.getByRole('button', { name: /stabilize/i })).toBeDisabled();
 		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
-		expect(screen.getByRole('button', { name: /hydrogen card 1/i })).toBeDisabled();
+		expect(screen.getByRole('button', { name: /card 1,/i })).toBeDisabled();
 	});
 
 	it('scraps a tile by selecting Scrap and tapping the tile', async () => {
@@ -376,9 +376,14 @@ describe('run screen', () => {
 		render(RunScreen);
 
 		await fireEvent.click(screen.getByRole('button', { name: /stabilize/i }));
-		await fireEvent.click(screen.getByRole('button', { name: /helium card 3/i }));
+		const card = screen.getByRole('button', { name: /card 3,/i });
+		// A real tap fires pointerdown before click. That press must not drop the
+		// Stabilize mode and turn the tap into a placement selection.
+		await fireEvent.pointerDown(card, STABILIZE_DELTA);
+		await fireEvent.pointerUp(card, STABILIZE_DELTA);
+		await fireEvent.click(card);
 
-		expect(screen.queryByRole('button', { name: /helium card/i })).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: /card 3, He Helium/i })).not.toBeInTheDocument();
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
 			'aria-valuenow',
 			String(PASSIVE_HEAT * 5 + PASSIVE_HEAT)
@@ -394,7 +399,7 @@ describe('run screen drag', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		const cell = screen.getByRole('button', { name: /^cell 12,/i });
 
 		await fireEvent.pointerDown(card, DRAG_START);
@@ -434,7 +439,7 @@ describe('run screen drag', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		await fireEvent.pointerDown(card, DRAG_START);
 
 		await fireEvent.pointerMove(screen.getByRole('button', { name: /^cell 12,/i }), DRAG_OVER);
@@ -465,7 +470,7 @@ describe('run screen drag', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		await fireEvent.pointerDown(card, DRAG_START);
 		await fireEvent.pointerMove(screen.getByRole('button', { name: /^cell 12,/i }), DRAG_OVER);
 		await fireEvent.pointerUp(document.body, { ...DRAG_OVER, clientX: 5, clientY: 5 });
@@ -480,7 +485,7 @@ describe('run screen drag', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		await fireEvent.pointerDown(card, DRAG_START);
 		await fireEvent.pointerMove(document.body, { ...DRAG_START, clientY: 460 });
 		await fireEvent.pointerUp(document.body, { ...DRAG_START, clientY: 460 });
@@ -513,7 +518,7 @@ describe('run screen drag', () => {
 		render(RunScreen);
 
 		await dragCardToCell(
-			screen.getByRole('button', { name: /hydrogen card 1/i }),
+			screen.getByRole('button', { name: /card 1,/i }),
 			screen.getByRole('button', { name: /^cell 12,/i })
 		);
 
@@ -528,7 +533,7 @@ describe('run screen drag', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		await fireEvent.pointerDown(card, DRAG_START);
 		await fireEvent.pointerMove(screen.getByRole('button', { name: /^cell 12,/i }), DRAG_OVER);
 		expect(screen.getByTestId('preview-result')).toHaveTextContent('Neon');
@@ -553,7 +558,7 @@ describe('run screen drag', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /carbon card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		const cell = screen.getByRole('button', { name: /^cell 12,/i });
 		await fireEvent.pointerDown(card, DRAG_START);
 		await fireEvent.pointerMove(cell, DRAG_OVER);
@@ -575,8 +580,8 @@ describe('run screen drag', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const first = screen.getByRole('button', { name: /hydrogen card 1/i });
-		const second = screen.getByRole('button', { name: /helium card 3/i });
+		const first = screen.getByRole('button', { name: /card 1,/i });
+		const second = screen.getByRole('button', { name: /card 3,/i });
 		const centre = screen.getByRole('button', { name: /^cell 12,/i });
 		const corner = screen.getByRole('button', { name: /^cell 18,/i });
 
@@ -600,7 +605,7 @@ describe('run screen drag', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		await fireEvent.pointerDown(card, { pointerId: 3, button: 0, clientX: 20, clientY: 320 });
 		await fireEvent.pointerMove(card, { pointerId: 3, button: 0, clientX: 160, clientY: 326 });
 		expect(document.body.style.touchAction).toBe('');
@@ -689,7 +694,7 @@ describe('run screen keyboard', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		card.focus();
 		await fireEvent.keyDown(card, { key: 'ArrowDown' });
 		expect(screen.getByRole('button', { name: /^cell 5,/i })).toHaveAttribute('data-ghost', 'true');
@@ -720,7 +725,7 @@ describe('run screen keyboard', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		card.focus();
 		await fireEvent.keyDown(card, { key: 'ArrowDown' });
 		await fireEvent.keyDown(card, { key: ' ' });
@@ -736,7 +741,7 @@ describe('run screen keyboard', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		card.focus();
 		await fireEvent.keyDown(card, { key: 'ArrowDown' });
 		await fireEvent.keyDown(card, { key: 'ArrowRight' });
@@ -754,7 +759,7 @@ describe('run screen keyboard', () => {
 		initGame({ run: branchRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /carbon card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		card.focus();
 		await fireEvent.keyDown(card, { key: 'ArrowDown' });
 		await fireEvent.keyDown(card, { key: 'ArrowRight' });
@@ -780,7 +785,7 @@ describe('run screen branch choices', () => {
 		initGame({ run: before });
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /carbon card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 
 		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
@@ -841,7 +846,7 @@ describe('run screen branch choices', () => {
 		initGame({ run: branchRun() });
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /carbon card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 
 		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
@@ -863,7 +868,7 @@ describe('run screen choreography', () => {
 
 	/** Confirm the tapped card at the centre cell through the modal preview. */
 	async function confirmCentrePlacement(): Promise<void> {
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
 		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
 		await fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }));
@@ -1025,7 +1030,7 @@ describe('run screen choreography', () => {
 		});
 		render(RunScreen);
 
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 3,/i }));
 		await fireEvent.click(
 			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
@@ -1043,7 +1048,7 @@ describe('run screen choreography', () => {
 		).toEqual(new Set([2, 3]));
 
 		// No input lock: the next placement is accepted while the first chain plays.
-		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
 		await fireEvent.click(screen.getByRole('button', { name: /^cell 22,/i }));
 		await fireEvent.click(
 			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
@@ -1101,7 +1106,7 @@ describe('run screen choreography', () => {
 
 		try {
 			await fireEvent.click(screen.getByRole('button', { name: /stabilize/i }));
-			await fireEvent.click(screen.getByRole('button', { name: /helium card 3/i }));
+			await fireEvent.click(screen.getByRole('button', { name: /card 3,/i }));
 
 			expect(animate).toHaveBeenCalled();
 			const proxy = document.querySelector('.discard-ghost');
@@ -1155,7 +1160,7 @@ describe('run screen swipes', () => {
 		initGame({ run: arcadeRun() });
 		render(RunScreen);
 
-		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const card = screen.getByRole('button', { name: /card 1,/i });
 		await fireEvent.click(card);
 		expect(card).toHaveAttribute('aria-pressed', 'true');
 

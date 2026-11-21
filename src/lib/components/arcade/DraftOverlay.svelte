@@ -81,14 +81,14 @@
 						bind:this={buttons[index]}
 						type="button"
 						class="option"
-						aria-label={`${upgrade?.name ?? id}: ${upgrade?.description ?? 'Upgrade'}`}
+						aria-label={`${index + 1} ${upgrade?.name ?? id}: ${upgrade?.description ?? 'Upgrade'} ${upgrade?.kind ?? 'upgrade'}`}
 						onclick={() => onPick(index)}
 						onkeydown={(event) => onOptionKeydown(event, index)}
 					>
-						<span class="number mono" aria-hidden="true">{index + 1}</span>
+						<span class="number mono" aria-hidden="true">{index + 1}&nbsp;</span>
 						<span class="body">
-							<span class="name">{upgrade?.name ?? id}</span>
-							<span class="description">{upgrade?.description ?? 'Upgrade'}</span>
+							<span class="name">{upgrade?.name ?? id}&nbsp;</span>
+							<span class="description">{upgrade?.description ?? 'Upgrade'}&nbsp;</span>
 						</span>
 						<span class="kind mono" aria-hidden="true">{upgrade?.kind ?? 'upgrade'}</span>
 					</button>

@@ -25,7 +25,8 @@
 
 <section class="hand" aria-label="Hand">
 	<p class="label mono">HAND // {cards.length}</p>
-	<div class="cards">
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex (a scrollable region whose children are disabled must stay keyboard reachable) -->
+	<div class="cards" tabindex={disabled ? 0 : -1}>
 		{#each cards as card, index (index)}
 			{@const record = ELEMENT_BY_SYMBOL.get(card)}
 			<button
@@ -33,7 +34,7 @@
 				class="card"
 				class:selected={selected === index}
 				aria-pressed={selected === index}
-				aria-label={`${card} ${record?.name ?? card} card ${index + 1}, valence ${record?.valence ?? '?'}, mass ${record?.mass ?? '?'}`}
+				aria-label={`card ${index + 1}, ${card} ${record?.name ?? card}, V ${record?.valence ?? '?'} M ${record?.mass ?? '?'}`}
 				{disabled}
 				use:dragPlacement={{
 					cardIndex: index,
@@ -44,8 +45,8 @@
 				onclick={() => onSelect?.(index)}
 				onkeydown={(event) => onKeyDown?.(event, index)}
 			>
-				<span class="symbol" aria-hidden="true">{card}</span>
-				<span class="name" aria-hidden="true">{record?.name ?? card}</span>
+				<span class="symbol" aria-hidden="true">{card}&nbsp;</span>
+				<span class="name" aria-hidden="true">{record?.name ?? card}&nbsp;</span>
 				<span class="stats" aria-hidden="true"
 					>V {record?.valence ?? '?'} · M {record?.mass ?? '?'}</span
 				>

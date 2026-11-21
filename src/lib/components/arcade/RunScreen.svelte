@@ -238,8 +238,9 @@
 	const dragHandlers: DragPlacementHandlers = {
 		begin(index) {
 			if ($locked) return;
+			// A press that becomes a tap must keep the active Stabilize mode so the
+			// click can commit it; only a real drag switches back to placement.
 			dragIndex = index;
-			mode = 'place';
 			ghost = null;
 			targetCell = null;
 			choices = [];
@@ -251,6 +252,7 @@
 				choices = [];
 				return;
 			}
+			mode = 'place';
 			if (cell !== targetCell) {
 				targetCell = cell;
 				choices = [];

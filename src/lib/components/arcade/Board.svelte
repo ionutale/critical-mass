@@ -59,7 +59,7 @@
 			data-ghost={isGhost ? 'true' : undefined}
 			aria-label={`${
 				record
-					? `cell ${cell}, ${record.name}, valence ${record.valence}, mass ${record.mass}`
+					? `cell ${cell}, ${tile} ${record.name}, V ${record.valence} M ${record.mass}`
 					: `cell ${cell}, empty`
 			}${isGhost ? ', keyboard target' : isPreview ? ', preview target' : ''}`}
 			{disabled}
@@ -73,8 +73,8 @@
 			onclick={() => onCell?.(cell)}
 		>
 			{#if tile && record}
-				<span class="symbol" aria-hidden="true">{tile}</span>
-				<span class="name" aria-hidden="true">{record.name}</span>
+				<span class="symbol" aria-hidden="true">{tile}&nbsp;</span>
+				<span class="name" aria-hidden="true">{record.name}&nbsp;</span>
 				<span class="stats" aria-hidden="true">V {record.valence} · M {record.mass}</span>
 			{:else}
 				<span class="void" aria-hidden="true">·</span>
