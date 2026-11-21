@@ -20,8 +20,6 @@
 		"e2e": "playwright test",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
-		"validate": "vite-node scripts/validate-content.ts",
-		"balance": "vite-node scripts/balance.ts",
 		"check:bundle": "node scripts/check-bundle.mjs",
 		"deploy": "pnpm build && wrangler deploy"
 	},

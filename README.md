@@ -21,8 +21,6 @@ pnpm test          # unit, engine, and component tests
 pnpm e2e           # Playwright against an existing build
 pnpm check         # svelte-check
 pnpm lint          # prettier + eslint
-pnpm validate      # content invariants
-pnpm balance       # seeded balance report (win rate, pressure, contracts)
 pnpm build         # static build in build/
 pnpm preview       # serve the production build
 pnpm check:bundle  # 250 KB gzip budget for client JS
@@ -50,17 +48,11 @@ pnpm deploy        # build and deploy to Cloudflare Workers
 
 All content is typed data under `src/lib/data/`:
 
-- `elements.ts` — 30 elements with tiers and heavy flags.
-- `recipes.ts` — fusion pairs, optionally Catalyst-only.
-- `contracts.ts` — 45 templates across 3 sectors × 5 slots × 3 variants.
-- `modules.ts` and `patches.ts` — reactor effects.
-- `unlocks.ts` — 16 meta research nodes.
+- `elements.ts` — the 12 light elements, one for every valence/mass pair.
+- `upgrades.ts` — the run upgrade pool.
+- `arcade/unlocks.ts` — lifetime meta unlocks.
 
-Run `pnpm validate` after editing. It enforces the launch counts, recipe reachability, unique ids, contract sectors, module effects, and unlock costs.
-
-## Balance
-
-`pnpm balance` plays 40 seeded runs each with three reference policies — casual, competent, and strong — in two configurations: no unlocks and all unlocks. It reports wins, meltdowns, abandoned runs, stalls (no delivery for 4,000 actions), average contracts, peak pressure, sector, and actions. The acceptance bands are 10–20% wins for casual/no-unlocks, 30–50% for competent/all-unlocks, and zero competent stalls. `pnpm balance --check` exits non-zero when a band misses, so tuning runs and CI can enforce the targets. It is a floor for tuning, not a solver.
+The engine and data tests enforce the element table, upgrade ids, and unlock costs.
 
 ## Saving
 
@@ -78,7 +70,7 @@ The icon config (near-black maskable/apple backgrounds) is in `pwa-assets.config
 
 ## CI and deploy
 
-GitHub Actions runs `validate`, `check`, `lint`, `test`, `build`, `check:bundle`, and the Playwright suite on every push and pull request. The `master` deploy job runs when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets exist.
+GitHub Actions runs `check`, `lint`, `test`, `build`, `check:bundle`, and the Playwright suite on every push and pull request. The `master` deploy job runs when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repository secrets exist.
 
 The game runs on Cloudflare Workers static assets:
 

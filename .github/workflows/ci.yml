@@ -38,9 +38,6 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Validate content
-        run: pnpm validate
-
       - name: Type check
         run: pnpm check
 

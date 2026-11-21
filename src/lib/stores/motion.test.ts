@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { initGame } from './game';
+import { initGame } from './arcade';
 import { reducedMotion } from './motion';
 
 beforeEach(() => {
@@ -33,8 +33,8 @@ describe('motion', () => {
 		vi.resetModules();
 
 		const motion = await import('./motion');
-		const stores = await import('./game');
-		stores.initGame({ settings: { sound: true, reduceMotion: false }, introSeen: true });
+		const stores = await import('./arcade');
+		stores.initGame({ settings: { sound: true, reduceMotion: false } });
 
 		expect(get(motion.reducedMotion)).toBe(false);
 		expect(query.addEventListener).toHaveBeenCalled();

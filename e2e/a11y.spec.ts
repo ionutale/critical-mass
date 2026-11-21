@@ -1,6 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import type { SaveState } from '../src/lib/types';
 
 const SAVE_KEY = 'critical-mass:save:v1';
 
@@ -45,7 +44,7 @@ function runFixture(overrides: Record<string, unknown> = {}) {
 	};
 }
 
-function saveFixture(overrides: Record<string, unknown> = {}): SaveState {
+function saveFixture(overrides: Record<string, unknown> = {}) {
 	return {
 		version: 2,
 		run: runFixture(),
@@ -57,7 +56,7 @@ function saveFixture(overrides: Record<string, unknown> = {}): SaveState {
 		settings: { sound: false, reduceMotion: false },
 		introSeen: true,
 		...overrides
-	} as SaveState;
+	};
 }
 
 async function seed(page: Page, overrides: Record<string, unknown> = {}) {
