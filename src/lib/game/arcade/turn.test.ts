@@ -332,7 +332,21 @@ describe('stabilize', () => {
 		const after = stabilize(run, 0);
 
 		expect(heatFloor(run)).toBe(PASSIVE_HEAT * 10);
-		expect(after.heat).toBe(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
+		// 35 is already below the turn-10 floor: Stabilize must not raise it, so
+		// only the passive Heat applies.
+		expect(after.heat).toBe(35 + PASSIVE_HEAT);
+		expect(after.heat).toBeLessThan(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
+	});
+
+	it('never raises Heat on turn 1 or when already at the floor', () => {
+		const firstTurn = chainRun({ turn: 1, heat: 0 });
+		const afterFirst = stabilize(firstTurn, 0);
+		expect(afterFirst.heat).toBe(PASSIVE_HEAT);
+		expect(afterFirst.heat).toBeLessThan(heatFloor(firstTurn) + PASSIVE_HEAT);
+
+		const atFloor = chainRun({ turn: 10, heat: PASSIVE_HEAT * 10 });
+		const afterFloor = stabilize(atFloor, 0);
+		expect(afterFloor.heat).toBe(PASSIVE_HEAT * 10 + PASSIVE_HEAT);
 	});
 
 	it('is a pure pass when the hand is empty: passive Heat, no cooling, no draw', () => {

@@ -357,7 +357,10 @@ export function stabilize(run: RunState, handIndex: number): RunState {
 
 	const cooling =
 		STABILIZE_COOLING + (hasUpgrade(run, 'coolant') ? UPGRADE_EFFECTS.coolant.coolingBonus : 0);
-	const cooled = Math.min(run.heatCap, Math.max(heatFloor(run), run.heat - cooling));
+	// Cooling can never add Heat: when the rising floor is already above the
+	// current Heat (turn 1, or a run that has been below the floor), the floor
+	// only stops further cooling instead of pulling Heat up to itself.
+	const cooled = Math.min(run.heat, Math.max(heatFloor(run), run.heat - cooling));
 	const withCard: RunState = {
 		...run,
 		...discardFromHand(run, handIndex),
