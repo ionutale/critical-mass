@@ -1,5 +1,6 @@
 import { derived, readable } from 'svelte/store';
-import { save } from './game';
+import { save as arcadeSave } from './arcade';
+import { save as legacySave } from './game';
 
 function prefersReducedMotion(): boolean {
 	if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -16,9 +17,15 @@ const systemReducedMotion = readable(prefersReducedMotion(), (set) => {
 	return () => query.removeEventListener?.('change', onChange);
 });
 
+/**
+ * Reduced motion if the player asked for it in either save store or the OS
+ * asked for it. The arcade save is the live one; the legacy save is read too
+ * while the retiring screens still share this store (removed in Task 13).
+ */
 export const reducedMotion = derived(
-	[save, systemReducedMotion],
-	([$save, $system]) => $save.settings.reduceMotion || $system
+	[arcadeSave, legacySave, systemReducedMotion],
+	([$arcade, $legacy, $system]) =>
+		$arcade.settings.reduceMotion || $legacy.settings.reduceMotion || $system
 );
 
 // Svelte's transitions are driven by the Web Animations API. Without it the

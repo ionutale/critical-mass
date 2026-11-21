@@ -780,6 +780,206 @@ describe('run screen branch choices', () => {
 	});
 });
 
+describe('run screen choreography', () => {
+	/** Confirm the tapped card at the centre cell through the modal preview. */
+	async function confirmCentrePlacement(): Promise<void> {
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
+		await fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }));
+	}
+
+	it('lays one merge ghost per involved cell over a committed chain', async () => {
+		const before = arcadeRun();
+		const expected = previewPlacement(before, 0, CENTER)!;
+		expect(expected.steps.length).toBeGreaterThan(1);
+		initGame({ run: before });
+		render(RunScreen);
+
+		await confirmCentrePlacement();
+
+		const layer = screen.getByTestId('chain-playback');
+		expect(layer).toHaveAttribute('aria-hidden', 'true');
+		expect(layer).toHaveAttribute('data-choreography', 'chain');
+		// The layer must not participate in layout: absolutely positioned, inert.
+		expect(layer.style.position).toBe('absolute');
+		expect(layer.style.pointerEvents).toBe('none');
+
+		const ghosts = within(layer).getAllByTestId('chain-ghost');
+		const involved = new Set([CENTER, ...expected.steps.map((step) => step.cell)]);
+		expect(ghosts).toHaveLength(involved.size);
+		expect(new Set(ghosts.map((ghost) => Number(ghost.dataset.cell)))).toEqual(involved);
+
+		// The result cell carries the surviving pop; consumed cells carry their step.
+		const surviving = ghosts.find((ghost) => ghost.dataset.cell === String(CENTER));
+		expect(surviving).toHaveClass('surviving');
+		expect(surviving).toHaveAttribute('data-step', 'result');
+		// The survivor starts as the placed card and steps through each result.
+		expect(surviving).toHaveTextContent(before.hand[0]!);
+
+		expected.steps.forEach((step, index) => {
+			const ghost = ghosts.find((element) => element.dataset.cell === String(step.cell));
+			expect(ghost).toHaveAttribute('data-step', String(index));
+			expect(ghost).toHaveTextContent(before.grid[step.cell]!);
+		});
+
+		// The flown card is drawn as a proxy at the hand before the chain resolves.
+		expect(within(layer).getByTestId('flight-ghost')).toHaveTextContent('H');
+	});
+
+	it('still flies the placed card when nothing fuses', async () => {
+		initGame({ run: arcadeRun({ grid: gridWith([[0, 'H']]) }) });
+		render(RunScreen);
+
+		await confirmCentrePlacement();
+
+		const layer = screen.getByTestId('chain-playback');
+		const ghosts = within(layer).getAllByTestId('chain-ghost');
+		expect(ghosts).toHaveLength(1);
+		expect(ghosts[0]).toHaveClass('surviving');
+		expect(ghosts[0]).toHaveAttribute('data-cell', String(CENTER));
+		expect(within(layer).getByTestId('flight-ghost')).toHaveTextContent('H');
+	});
+
+	it('marks the score float and the heat tween for the playback', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		await confirmCentrePlacement();
+
+		const scoreSlot = screen.getByTestId('score-value').closest('[data-motion]');
+		expect(scoreSlot).toHaveAttribute('data-motion', 'score');
+		const heatSlot = screen.getByRole('meter', { name: /heat/i }).closest('[data-motion]');
+		expect(heatSlot).toHaveAttribute('data-motion', 'heat');
+
+		const layer = screen.getByTestId('chain-playback');
+		expect(within(layer).getByTestId('score-float')).toHaveTextContent(
+			`+${previewPlacement(arcadeRun(), 0, CENTER)!.scoreGain}`
+		);
+	});
+
+	it('adds no motion layer and commits instantly under reduced motion', async () => {
+		const before = arcadeRun();
+		const expected = previewPlacement(before, 0, CENTER)!;
+		initGame({ run: before, settings: { sound: true, reduceMotion: true } });
+		render(RunScreen);
+
+		await confirmCentrePlacement();
+
+		expect(screen.queryByTestId('chain-playback')).not.toBeInTheDocument();
+		expect(document.querySelector('[data-motion]')).toBeNull();
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Neon');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
+			'aria-valuenow',
+			String(expected.heatAfterTurn)
+		);
+	});
+
+	it('cancels the previous playback when a new placement lands', async () => {
+		initGame({
+			run: arcadeRun({
+				grid: gridWith([
+					[2, 'H'],
+					[21, 'H']
+				]),
+				hand: ['H', 'H', 'H'],
+				deck: ['H']
+			})
+		});
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 3,/i }));
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /confirm/i
+			})
+		);
+
+		const first = screen.getByTestId('chain-playback');
+		expect(
+			new Set(
+				within(first)
+					.getAllByTestId('chain-ghost')
+					.map((ghost) => Number(ghost.dataset.cell))
+			)
+		).toEqual(new Set([2, 3]));
+
+		// No input lock: the next placement is accepted while the first chain plays.
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 22,/i }));
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /confirm/i
+			})
+		);
+
+		const layers = screen.getAllByTestId('chain-playback');
+		expect(layers).toHaveLength(1);
+		expect(
+			new Set(
+				within(layers[0])
+					.getAllByTestId('chain-ghost')
+					.map((ghost) => Number(ghost.dataset.cell))
+			)
+		).toEqual(new Set([21, 22]));
+	});
+
+	it('keeps the board rect stable while the playback layer is mounted', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const board = screen.getByRole('group', { name: /reactor board/i });
+		const before = board.getBoundingClientRect();
+
+		await confirmCentrePlacement();
+
+		const layer = screen.getByTestId('chain-playback');
+		expect(layer.contains(board)).toBe(false);
+		const after = board.getBoundingClientRect();
+		expect(after.width).toBe(before.width);
+		expect(after.height).toBe(before.height);
+		expect(after.left).toBe(before.left);
+		expect(after.top).toBe(before.top);
+	});
+
+	it('flies a stabilized card into the discard pile when WAAPI is present', async () => {
+		type Listener = () => void;
+		const listeners: Listener[] = [];
+		const animate = vi.fn(
+			() =>
+				({
+					cancel: vi.fn(),
+					addEventListener: (_type: string, listener: Listener) => listeners.push(listener)
+				}) as unknown as Animation
+		);
+		const original = Object.getOwnPropertyDescriptor(Element.prototype, 'animate');
+		Object.defineProperty(Element.prototype, 'animate', {
+			configurable: true,
+			writable: true,
+			value: animate
+		});
+		initGame({ run: arcadeRun({ heat: 20, turn: 5 }) });
+		render(RunScreen);
+
+		try {
+			await fireEvent.click(screen.getByRole('button', { name: /stabilize/i }));
+			await fireEvent.click(screen.getByRole('button', { name: /helium card 3/i }));
+
+			expect(animate).toHaveBeenCalled();
+			const proxy = document.querySelector('.discard-ghost');
+			expect(proxy).not.toBeNull();
+			expect(proxy).toHaveTextContent('He');
+
+			for (const listener of listeners) listener();
+			expect(document.querySelector('.discard-ghost')).toBeNull();
+		} finally {
+			if (original) Object.defineProperty(Element.prototype, 'animate', original);
+			else Reflect.deleteProperty(Element.prototype, 'animate');
+		}
+	});
+});
+
 describe('run screen swipes', () => {
 	it('swipe up on the reactor opens a Stabilize picker that requires a card', async () => {
 		initGame({ run: arcadeRun({ heat: 20, turn: 5 }) });

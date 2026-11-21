@@ -260,3 +260,120 @@
 		scroll-behavior: auto !important;
 	}
 }
+
+/* --- Arcade chain choreography --- */
+
+/* An absolute, inert overlay: ghosts are positioned from rectangles captured
+   before the commit, relative to the board stage, so the playback scrolls with
+   the board and never participates in layout. */
+.chain-playback {
+	position: absolute;
+	inset: 0;
+	z-index: 40;
+	pointer-events: none;
+	contain: layout style;
+}
+
+.chain-ghost,
+.flight-ghost,
+.discard-ghost,
+.score-float {
+	position: absolute;
+	will-change: transform, opacity;
+}
+
+.chain-ghost,
+.flight-ghost {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 6px;
+}
+
+.chain-ghost {
+	background: rgba(13, 20, 36, 0.82);
+	border: 1px solid rgba(56, 225, 255, 0.45);
+	box-shadow: inset 0 0 12px rgba(56, 225, 255, 0.18);
+}
+
+.chain-ghost.surviving {
+	background: rgba(255, 179, 71, 0.08);
+	border-color: var(--amber);
+	box-shadow:
+		0 0 18px rgba(255, 179, 71, 0.35),
+		inset 0 0 14px rgba(255, 179, 71, 0.2);
+}
+
+.flight-ghost {
+	background: var(--panel-2);
+	border: 1px solid rgba(56, 225, 255, 0.55);
+	border-radius: 7px;
+	box-shadow: 0 0 16px rgba(56, 225, 255, 0.3);
+}
+
+.discard-ghost {
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 44px;
+	font-size: 10px;
+	background: var(--panel);
+	border: 1px solid rgba(143, 163, 194, 0.5);
+	border-radius: 5px;
+	opacity: 0.65;
+}
+
+.chain-ghost .symbol,
+.flight-ghost .symbol {
+	font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+	font-size: 18px;
+	font-weight: 700;
+	color: var(--cyan);
+	text-shadow: 0 0 10px rgba(56, 225, 255, 0.5);
+}
+
+.chain-ghost.surviving .symbol {
+	color: var(--amber);
+	text-shadow: 0 0 10px rgba(255, 179, 71, 0.6);
+}
+
+.score-float {
+	font-family: 'JetBrains Mono Variable', ui-monospace, monospace;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--lime);
+	text-shadow: 0 0 10px rgba(182, 255, 92, 0.55);
+	animation: score-rise 620ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
+}
+
+@keyframes score-rise {
+	from {
+		opacity: 0;
+		transform: translateY(6px) scale(0.9);
+	}
+	25% {
+		opacity: 1;
+	}
+	to {
+		opacity: 0;
+		transform: translateY(-28px) scale(1.05);
+	}
+}
+
+.reduce-motion .chain-playback {
+	display: none !important;
+}
+
+.reduce-motion .score-float {
+	animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chain-playback {
+		display: none !important;
+	}
+
+	.score-float {
+		animation: none !important;
+	}
+}

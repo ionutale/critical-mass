@@ -1,11 +1,16 @@
 <script lang="ts">
+	import { fly } from 'svelte/transition';
 	import { firstEmptyCell, stepCell } from '../../actions/arcadeDrag';
 	import type { DragPlacementHandlers } from '../../actions/arcadeDrag';
 	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import { previewPlacement } from '../../game/arcade/fusion';
 	import { scrapLimit } from '../../game/arcade/turn';
 	import { locked, place, run, save, scrap, stabilize } from '../../stores/arcade';
+	import { reducedMotion, transitionDuration } from '../../stores/motion';
 	import Board from './Board.svelte';
+	import ChainPlayback from './ChainPlayback.svelte';
+	import { capturePlayback, boxOf, flyProxy } from './choreography';
+	import type { PlaybackModel } from './choreography';
 	import Hand from './Hand.svelte';
 	import HeatBar from './HeatBar.svelte';
 	import PreviewPanel from './PreviewPanel.svelte';
@@ -26,6 +31,17 @@
 	let mode = $state<Mode>('place');
 	let pickerOpen = $state(false);
 
+	/** Chain playback mounted after a commit; a new placement replaces it. */
+	let playback = $state<PlaybackModel | null>(null);
+	let playbackId = 0;
+
+	/** DOM nodes captured before a commit drives the playback. */
+	let stageEl = $state<HTMLElement | null>(null);
+	let handEl = $state<HTMLElement | null>(null);
+	let heatEl = $state<HTMLElement | null>(null);
+	let scoreEl = $state<HTMLElement | null>(null);
+	let countsEl = $state<HTMLElement | null>(null);
+
 	const hand = $derived($run?.hand ?? []);
 	const activeIndex = $derived(dragIndex ?? selected);
 	const activeCard = $derived(activeIndex === null ? null : (hand[activeIndex] ?? null));
@@ -35,6 +51,12 @@
 	});
 	const handEmpty = $derived(hand.length === 0);
 	const scrapsSpent = $derived(!$run || $run.scrapsUsed >= scrapLimit($run));
+	/** Playback markers: no playback means no `data-motion` attribute at all. */
+	const scoreMotion = $derived(
+		playback && playback.scoreTo > playback.scoreFrom ? 'score' : undefined
+	);
+	const heatMotion = $derived(playback ? 'heat' : undefined);
+	const overloadMotion = $derived(playback?.overload ? 'overload' : undefined);
 	const targets = $derived.by(() => {
 		if (activeIndex === null || !$run) return null;
 		return $run.grid.flatMap((tile, cell) => (tile === null ? [cell] : []));
@@ -73,6 +95,24 @@
 		clearPlacement();
 	}
 
+	/** Discard the Stabilize card with a flight into the discard counter. */
+	function commitStabilize(handIndex: number): void {
+		const state = $run;
+		if (!state || $locked) return;
+		const card = state.hand[handIndex];
+		if (!card) return;
+
+		if (!$reducedMotion) {
+			flyProxy({
+				symbol: card,
+				from: boxOf(handEl?.querySelectorAll<HTMLElement>('.cards > button')[handIndex]),
+				to: countsEl
+			});
+		}
+
+		stabilize(handIndex);
+	}
+
 	function cancelPlacement(): void {
 		dragIndex = null;
 		clearPlacement();
@@ -88,7 +128,7 @@
 		if (!$run || $locked) return;
 
 		if (mode === 'stabilize') {
-			stabilize(index);
+			commitStabilize(index);
 			finishTurn();
 			return;
 		}
@@ -130,13 +170,47 @@
 		}
 
 		const committedChoices = choices;
-		if (!previewPlacement(state, index, cell, committedChoices)) {
+		const result = previewPlacement(state, index, cell, committedChoices);
+		const placed = state.hand[index];
+		if (!result || !placed) {
 			cancelPlacement();
 			return;
 		}
 
+		// Capture before the store commit: `place` resolves synchronously, so the
+		// consumed tiles and the hand card are already gone when playback mounts.
+		// A fresh placement replaces any chain still playing.
+		const snapshot = $reducedMotion
+			? null
+			: capturePlayback({
+					id: ++playbackId,
+					stage: stageEl,
+					hand: handEl,
+					heat: heatEl,
+					score: scoreEl,
+					discard: countsEl,
+					handIndex: index,
+					cell,
+					card: placed,
+					grid: state.grid,
+					handBefore: state.hand,
+					finalGrid: result.grid,
+					steps: result.steps,
+					scoreFrom: state.score,
+					scoreTo: state.score + result.scoreGain,
+					heatFrom: state.heat,
+					heatTo: result.heatAfterTurn,
+					overload: result.overloadAfterTurn
+				});
+
 		place(index, cell, committedChoices);
+		playback = snapshot;
 		finishTurn();
+	}
+
+	/** Clear a finished playback unless a newer placement already replaced it. */
+	function finishPlayback(id: number): void {
+		if (playback?.id === id) playback = null;
 	}
 
 	function confirm(): void {
@@ -198,7 +272,7 @@
 	function pickStabilize(index: number): void {
 		pickerOpen = false;
 		if (!$run || $locked) return;
-		stabilize(index);
+		commitStabilize(index);
 		finishTurn();
 	}
 
@@ -206,7 +280,7 @@
 		if (!$run || $locked || handEmpty) return;
 
 		if (selected !== null) {
-			stabilize(selected);
+			commitStabilize(selected);
 			finishTurn();
 			return;
 		}
@@ -286,31 +360,55 @@
 </script>
 
 {#if $run}
-	<main class="app arcade-run">
+	<main class="app arcade-run" in:fly={{ y: 8, duration: transitionDuration($reducedMotion, 180) }}>
 		<header class="top">
 			<div>
 				<p class="kicker mono">REACTOR // TURN {$run.turn}</p>
 				<h1>CRITICAL MASS</h1>
 				<p class="seed mono">SEED {$run.seed}</p>
 			</div>
-			<ScoreDisplay score={$run.score} best={$save.meta.bestScore} runs={$save.meta.runs} />
+			<div class="score-slot" bind:this={scoreEl} data-motion={scoreMotion}>
+				<ScoreDisplay score={$run.score} best={$save.meta.bestScore} runs={$save.meta.runs} />
+			</div>
 		</header>
 
-		<HeatBar heat={$run.heat} cap={$run.heatCap} />
+		<div class="heat-slot" bind:this={heatEl} data-motion={heatMotion}>
+			<HeatBar heat={$run.heat} cap={$run.heatCap} />
+		</div>
 
 		<p class="hint" role="status" aria-live="polite" data-testid="preview-live">{hint}</p>
 
-		<Board
-			grid={$run.grid}
-			{targets}
-			{ghost}
-			previewCell={targetCell}
-			disabled={$locked}
-			onCell={chooseCell}
-			onSwipeUp={openStabilizePicker}
-			onSwipeDown={cancel}
-			onScrapTile={scrapTile}
-		/>
+		<div class="board-stage" bind:this={stageEl} data-motion={overloadMotion}>
+			<Board
+				grid={$run.grid}
+				{targets}
+				{ghost}
+				previewCell={targetCell}
+				disabled={$locked}
+				onCell={chooseCell}
+				onSwipeUp={openStabilizePicker}
+				onSwipeDown={cancel}
+				onScrapTile={scrapTile}
+			/>
+
+			{#if playback}
+				{@const current = playback}
+				{#key current.id}
+					<ChainPlayback
+						playback={current}
+						refs={{
+							stage: stageEl,
+							hand: handEl,
+							heat: heatEl,
+							score: scoreEl,
+							discard: countsEl
+						}}
+						reducedMotion={$reducedMotion}
+						onDone={() => finishPlayback(current.id)}
+					/>
+				{/key}
+			{/if}
+		</div>
 
 		{#if preview && activeCard && targetCell !== null}
 			<PreviewPanel
@@ -348,19 +446,29 @@
 			</button>
 		</div>
 
-		<Hand
-			cards={$run.hand}
-			{selected}
-			disabled={$locked}
-			onSelect={chooseCard}
-			drag={dragHandlers}
-			onKeyDown={onCardKey}
-		/>
+		<div class="hand-stage" bind:this={handEl}>
+			<Hand
+				cards={$run.hand}
+				{selected}
+				disabled={$locked}
+				onSelect={chooseCard}
+				drag={dragHandlers}
+				onKeyDown={onCardKey}
+			/>
+		</div>
 
-		<p class="counts mono">DECK {$run.deck.length} · DISCARD {$run.discard.length}</p>
+		<p class="counts mono" bind:this={countsEl}>
+			DECK {$run.deck.length} · DISCARD {$run.discard.length}
+		</p>
 
 		{#if $run.status === 'overload'}
-			<p class="overload" role="alert">Overload! The reactor has melted down.</p>
+			<p
+				class="overload"
+				role="alert"
+				in:fly={{ y: 6, duration: transitionDuration($reducedMotion, 220) }}
+			>
+				Overload! The reactor has melted down.
+			</p>
 		{/if}
 	</main>
 
@@ -372,6 +480,10 @@
 <style>
 	.arcade-run {
 		gap: 10px;
+	}
+
+	.board-stage {
+		position: relative;
 	}
 
 	.top {
