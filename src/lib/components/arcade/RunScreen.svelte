@@ -331,7 +331,6 @@
 			ghost = null;
 			targetCell = null;
 			choices = [];
-			if (mode !== 'stabilize') playSound('pick');
 		},
 		hover(cell) {
 			if (dragIndex === null) return;
