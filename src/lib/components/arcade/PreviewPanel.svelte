@@ -2,6 +2,7 @@
 	import { trapFocus } from '../../actions/trapFocus';
 	import { ELEMENT_BY_SYMBOL } from '../../data/elements';
 	import type { PlacementPreview } from '../../game/arcade/fusion';
+	import { PASSIVE_HEAT } from '../../game/arcade/heat';
 	import type { ElementSymbol } from '../../types';
 
 	let {
@@ -70,13 +71,22 @@
 				<dd class="mono" data-testid="preview-score">+{preview.scoreGain}</dd>
 			</div>
 			<div>
-				<dt>Heat after</dt>
-				<dd class="mono" data-testid="preview-heat">{preview.heatAfter} / {heatCap}</dd>
+				<dt>Heat after turn</dt>
+				<dd class="mono" data-testid="preview-heat">{preview.heatAfterTurn} / {heatCap}</dd>
+				<dd class="detail mono" data-testid="preview-chain-heat">
+					chain {preview.heatAfter} +{PASSIVE_HEAT} passive
+				</dd>
 			</div>
 		</dl>
 
-		{#if preview.overload}
-			<p class="warning" role="alert">Overload! This placement ends the run.</p>
+		{#if preview.overloadAfterTurn}
+			<p class="warning" role="alert">
+				{#if preview.overload}
+					Overload! This placement ends the run.
+				{:else}
+					Overload! The +{PASSIVE_HEAT} passive Heat ends the run.
+				{/if}
+			</p>
 		{/if}
 
 		<div class="actions">
@@ -207,6 +217,14 @@
 
 	.outcome dd[data-testid='preview-heat'] {
 		color: var(--amber);
+	}
+
+	.outcome .detail {
+		margin: 2px 0 0;
+		font-size: 9px;
+		font-weight: 400;
+		letter-spacing: 0.04em;
+		color: var(--muted);
 	}
 
 	.warning {

@@ -154,6 +154,9 @@ describe('run screen', () => {
 			`+${expected!.scoreGain}`
 		);
 		expect(within(dialog).getByTestId('preview-heat')).toHaveTextContent(
+			String(expected!.heatAfterTurn)
+		);
+		expect(within(dialog).getByTestId('preview-chain-heat')).toHaveTextContent(
 			String(expected!.heatAfter)
 		);
 		expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
@@ -165,7 +168,7 @@ describe('run screen', () => {
 		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('empty');
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute(
 			'aria-valuenow',
-			String(expected!.heatAfter + 3)
+			String(expected!.heatAfterTurn)
 		);
 		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent(
 			String(expected!.scoreGain)
@@ -191,6 +194,7 @@ describe('run screen', () => {
 		const before = arcadeRun({ heat: 99 });
 		const expected = previewPlacement(before, 0, CENTER);
 		expect(expected?.overload).toBe(true);
+		expect(expected?.overloadAfterTurn).toBe(true);
 		initGame({ run: before });
 		render(RunScreen);
 
@@ -206,6 +210,31 @@ describe('run screen', () => {
 		expect(screen.getByRole('alert')).toHaveTextContent(/overload/i);
 		expect(screen.getByRole('button', { name: /stabilize/i })).toBeDisabled();
 		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
+	});
+
+	it('warns when the end-of-turn passive Heat crosses the cap', async () => {
+		const before = arcadeRun({ heat: 95, grid: gridWith([[13, 'H']]) });
+		const expected = previewPlacement(before, 0, CENTER)!;
+		expect(expected.heatAfter).toBe(97);
+		expect(expected.overload).toBe(false);
+		expect(expected.heatAfterTurn).toBe(100);
+		expect(expected.overloadAfterTurn).toBe(true);
+		initGame({ run: before });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /hydrogen card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+
+		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(within(dialog).getByTestId('preview-heat')).toHaveTextContent('100 / 100');
+		expect(within(dialog).getByTestId('preview-chain-heat')).toHaveTextContent('97');
+		expect(within(dialog).getByRole('alert')).toHaveTextContent(/overload/i);
+
+		await fireEvent.click(within(dialog).getByRole('button', { name: /confirm/i }));
+
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '100');
+		expect(screen.getByRole('alert')).toHaveTextContent(/overload/i);
+		expect(screen.getByRole('button', { name: /stabilize/i })).toBeDisabled();
 	});
 
 	it('disables Scrap once the per-turn limit is spent', () => {

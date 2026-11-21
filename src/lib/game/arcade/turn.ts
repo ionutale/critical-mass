@@ -5,6 +5,7 @@ import type { UpgradeId } from '../../data/upgrades';
 import type { ElementRecord, ElementSymbol } from '../../types';
 import { pickIndex, shuffleWithState } from '../rng';
 import { previewPlacement } from './fusion';
+import { PASSIVE_HEAT } from './heat';
 import type { FusionState } from './types';
 
 /** The arcade run ends only by Overload. */
@@ -57,8 +58,6 @@ const CELL_COUNT = GRID_SIZE * GRID_SIZE;
 const HAND_SIZE = 5;
 const HEAT_CAP = 100;
 const MAX_SEED_TILES = 2;
-/** Passive Heat added every turn; it also sets the per-turn floor. */
-const PASSIVE_HEAT = 3;
 /** Heat removed by one Stabilize, before the rising floor is applied. */
 const STABILIZE_COOLING = 15;
 /** Heat values that each queue one Upgrade draft, in order. */
@@ -280,7 +279,7 @@ function discardFromHand(run: RunState, handIndex: number): Pick<RunState, 'hand
  *
  * Heat is checked for Overload immediately after the chain (a lethal placement
  * scores and ends the run without a draw), and again after the passive +3. The
- * committed Heat is the clamped `heatAfter` from the Preview, so the two cannot
+ * committed Heat is the Preview's clamped `heatAfterTurn`, so the two cannot
  * diverge.
  */
 export function placeCard(

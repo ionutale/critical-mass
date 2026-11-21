@@ -252,7 +252,7 @@ describe('placeCard turn resolution', () => {
 
 		expect(after.grid).toEqual(preview.grid);
 		expect(after.score - run.score).toBe(preview.scoreGain);
-		expect(after.heat).toBe(preview.heatAfter + 3);
+		expect(after.heat).toBe(preview.heatAfterTurn);
 	});
 
 	it('awards score before overload when the chain itself reaches the cap', () => {
@@ -266,7 +266,7 @@ describe('placeCard turn resolution', () => {
 		expect(after.score - run.score).toBe(preview.scoreGain);
 		expect(after.score - run.score).toBeGreaterThan(0);
 		expect(after.grid).toEqual(preview.grid);
-		expect(after.heat).toBe(preview.heatAfter);
+		expect(after.heat).toBe(preview.heatAfterTurn);
 		expect(after.status).toBe('overload');
 		// A lethal placement does not run the end-of-turn draw.
 		expect(after.turn).toBe(run.turn);
@@ -274,11 +274,15 @@ describe('placeCard turn resolution', () => {
 
 	it('overloads when the end-of-turn +3 crosses the cap', () => {
 		const run = chainRun({ grid: buildGrid(), heat: 98 });
+		const preview = previewPlacement(run, 0, CENTER)!;
+		expect(preview.overload).toBe(false);
+		expect(preview.heatAfterTurn).toBe(100);
+		expect(preview.overloadAfterTurn).toBe(true);
 
 		const after = placeCard(run, 0, CENTER);
 
 		expect(after.score).toBe(run.score);
-		expect(after.heat).toBe(100);
+		expect(after.heat).toBe(preview.heatAfterTurn);
 		expect(after.status).toBe('overload');
 		expect(after.turn).toBe(run.turn + 1);
 	});

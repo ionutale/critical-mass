@@ -1,6 +1,7 @@
 import { ELEMENT_BY_SYMBOL, elementAt, rarityOf } from '../../data/elements';
 import { UPGRADE_EFFECTS, hasUpgrade } from '../../data/upgrades';
 import type { ElementSymbol } from '../../types';
+import { PASSIVE_HEAT } from './heat';
 import type { FusionState } from './types';
 
 /** One fusable neighbour at a chain step, with its step-weighted score and heat. */
@@ -37,8 +38,14 @@ export interface PlacementResult {
 
 /** A placement result plus the heat state the player sees in the Preview. */
 export interface PlacementPreview extends PlacementResult {
+	/** Heat after the chain, before this turn's passive Heat. */
 	heatAfter: number;
+	/** True when the chain alone reaches the cap. */
 	overload: boolean;
+	/** Heat the run holds after the chain and the end-of-turn passive Heat, clamped. */
+	heatAfterTurn: number;
+	/** True when the post-turn Heat reaches the cap and ends the run. */
+	overloadAfterTurn: boolean;
 }
 
 const GRID_SIZE = 5;
@@ -237,9 +244,10 @@ export function resolvePlacement(
  * Resolve a placement and add the Preview-only heat fields. The resolution is
  * identical to `resolvePlacement`, so Preview and commit cannot diverge.
  *
- * `heatAfter` is clamped to the cap exactly as a committed placement is, while
- * `overload` reports the raw result: the Preview shows the same 100 Heat the
- * run will hold after a lethal placement.
+ * `heatAfter`/`overload` describe the chain alone, while `heatAfterTurn`/
+ * `overloadAfterTurn` include the end-of-turn passive Heat. Both heat values are
+ * clamped to the cap exactly as a committed placement is; the post-turn pair is
+ * what the player sees and what `placeCard` commits.
  */
 export function previewPlacement(
 	run: FusionState,
@@ -252,5 +260,12 @@ export function previewPlacement(
 
 	const rawHeat = run.heat + result.heatGain;
 	const heatAfter = Math.min(run.heatCap, rawHeat);
-	return { ...result, heatAfter, overload: rawHeat >= run.heatCap };
+	const heatAfterTurn = Math.min(run.heatCap, heatAfter + PASSIVE_HEAT);
+	return {
+		...result,
+		heatAfter,
+		overload: rawHeat >= run.heatCap,
+		heatAfterTurn,
+		overloadAfterTurn: heatAfterTurn >= run.heatCap
+	};
 }

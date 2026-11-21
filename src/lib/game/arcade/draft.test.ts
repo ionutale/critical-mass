@@ -315,7 +315,7 @@ describe('upgrade effects', () => {
 		expect(spent.heatGain).toBe(11);
 
 		const after = placeCard(base, 0, CENTER, CHAIN_CHOICES);
-		expect(after.heat).toBe(preview.heatAfter + 3);
+		expect(after.heat).toBe(preview.heatAfterTurn);
 		// The next turn starts with a fresh Heat Sink.
 		expect(after.heatSinkUsed).toBe(false);
 	});
@@ -391,6 +391,6 @@ describe('preview and commit with upgrades', () => {
 
 		expect(after.grid).toEqual(preview.grid);
 		expect(after.score - base.score).toBe(preview.scoreGain);
-		expect(after.heat).toBe(preview.heatAfter + 3);
+		expect(after.heat).toBe(preview.heatAfterTurn);
 	});
 });

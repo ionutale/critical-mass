@@ -280,6 +280,24 @@ describe('resolvePlacement chains and scoring', () => {
 		expect(preview.heatGain).toBe(result.heatGain);
 		expect(preview.heatAfter).toBe(51);
 		expect(preview.overload).toBe(false);
+		expect(preview.heatAfterTurn).toBe(54);
+		expect(preview.overloadAfterTurn).toBe(false);
+	});
+
+	it('reports the post-turn heat and overload after the passive +3', () => {
+		// 86 + 11 chain Heat = 97, so only the end-of-turn +3 reaches the cap.
+		const boundary = previewPlacement(chainRun({ heat: 86 }), 0, CENTER, [1, 1, 0])!;
+		expect(boundary.heatAfter).toBe(97);
+		expect(boundary.overload).toBe(false);
+		expect(boundary.heatAfterTurn).toBe(100);
+		expect(boundary.overloadAfterTurn).toBe(true);
+
+		// A lethal chain is already at the cap, so the +3 cannot raise it further.
+		const lethal = previewPlacement(chainRun({ heat: 95 }), 0, CENTER, [1, 1, 0])!;
+		expect(lethal.heatAfter).toBe(100);
+		expect(lethal.overload).toBe(true);
+		expect(lethal.heatAfterTurn).toBe(100);
+		expect(lethal.overloadAfterTurn).toBe(true);
 	});
 
 	it('reports heatAfter and overload at the cap', () => {
@@ -288,6 +306,8 @@ describe('resolvePlacement chains and scoring', () => {
 
 		expect(below.heatAfter).toBe(99);
 		expect(below.overload).toBe(false);
+		expect(below.heatAfterTurn).toBe(100);
+		expect(below.overloadAfterTurn).toBe(true);
 		expect(atCap.heatAfter).toBe(100);
 		expect(atCap.overload).toBe(true);
 	});
