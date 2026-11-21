@@ -1281,6 +1281,38 @@ describe('run screen choreography', () => {
 	});
 });
 
+describe('particle burst', () => {
+	it('renders the canvas behind the board and restarts it on a fusion', async () => {
+		initGame({ run: arcadeRun({ grid: gridWith([[7, 'H']]) }) });
+		render(RunScreen);
+
+		const stage = document.querySelector('.board-stage');
+		const canvas = stage?.querySelector<HTMLCanvasElement>('canvas.particles');
+		expect(canvas).not.toBeNull();
+		expect(canvas).toHaveAttribute('aria-hidden', 'true');
+		expect(canvas).toHaveAttribute('data-burst', '0');
+		expect(stage?.firstElementChild).toBe(canvas);
+
+		await fireEvent.click(screen.getByRole('button', { name: /card 1,/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+		await fireEvent.click(
+			within(screen.getByRole('dialog', { name: /placement preview/i })).getByRole('button', {
+				name: /^confirm$/i
+			})
+		);
+
+		expect(document.querySelector('canvas.particles')).toHaveAttribute('data-burst', '1');
+		expect(document.querySelector('canvas.particles')).toHaveAttribute('data-mode', 'fusion');
+	});
+
+	it('omits the canvas under reduced motion', () => {
+		initGame({ run: arcadeRun(), settings: { sound: false, reduceMotion: true } });
+		render(RunScreen);
+
+		expect(document.querySelector('canvas.particles')).toBeNull();
+	});
+});
+
 describe('run screen sound', () => {
 	it('emits a pick cue on selection and a fusion cue on placement', async () => {
 		initGame({ run: arcadeRun() });

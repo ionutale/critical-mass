@@ -20,6 +20,7 @@
 	import Hand from './Hand.svelte';
 	import HeatBar from './HeatBar.svelte';
 	import PreviewPanel from './PreviewPanel.svelte';
+	import ParticleField from './ParticleField.svelte';
 	import ScoreDisplay from './ScoreDisplay.svelte';
 	import StabilizePicker from './StabilizePicker.svelte';
 
@@ -44,6 +45,10 @@
 	/** Chain playback mounted after a commit; a new placement replaces it. */
 	let playback = $state<PlaybackModel | null>(null);
 	let playbackId = 0;
+
+	/** Restarts the board-local particle burst; 0 is the resting field. */
+	let burst = $state(0);
+	let particleMode = $state<'fusion' | 'meltdown'>('fusion');
 
 	/** DOM nodes captured before a commit drives the playback. */
 	let stageEl = $state<HTMLElement | null>(null);
@@ -120,9 +125,18 @@
 	}
 
 	/** Play the Overload cue only on the active → Overload transition. */
-	function announceOverload(before: RunState | null): void {
-		if (before?.status === 'overload') return;
-		if (get(run)?.status === 'overload') playSound('meltdown');
+	function announceOverload(before: RunState | null): boolean {
+		if (before?.status === 'overload') return false;
+		if (get(run)?.status !== 'overload') return false;
+		playSound('meltdown');
+		emitBurst('meltdown');
+		return true;
+	}
+
+	/** Kick one short particle burst behind the reactor. */
+	function emitBurst(kind: 'fusion' | 'meltdown'): void {
+		burst += 1;
+		particleMode = kind;
 	}
 
 	/** Discard the Stabilize card with a flight into the discard counter. */
@@ -252,7 +266,7 @@
 
 		place(index, cell, committedChoices);
 		playSound(result.steps.length > 0 ? 'fusion' : 'pick');
-		announceOverload(state);
+		if (!announceOverload(state) && result.steps.length > 0) emitBurst('fusion');
 		playback = snapshot;
 		finishTurn();
 	}
@@ -473,6 +487,12 @@
 		<p class="hint" role="status" aria-live="polite" data-testid="preview-live">{hint}</p>
 
 		<div class="board-stage" bind:this={stageEl} data-motion={overloadMotion}>
+			<ParticleField
+				seed={$run.rngState}
+				{burst}
+				mode={particleMode}
+				reducedMotion={$reducedMotion}
+			/>
 			<Board
 				grid={$run.grid}
 				{targets}
@@ -584,6 +604,7 @@
 
 	.board-stage {
 		position: relative;
+		isolation: isolate;
 	}
 
 	.top {

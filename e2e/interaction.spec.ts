@@ -226,6 +226,28 @@ for (const viewport of [
 }
 
 
+test('a fusion restarts the board-local particle burst', async ({ page }) => {
+	await seedRun(page, { grid: gridWith({ 6: 'N' }) });
+	await page.goto('/');
+	await page.getByRole('button', { name: /continue run/i }).click();
+
+	const canvas = page.locator('canvas.particles');
+	await expect(canvas).toHaveCount(1);
+	await expect(canvas).toHaveAttribute('data-burst', '0');
+	// Behind the board in DOM order, and inert.
+	await expect(canvas).toHaveAttribute('aria-hidden', 'true');
+
+	await page.getByRole('button', { name: /card 1, H Hydrogen/i }).click();
+	await page.getByRole('button', { name: /cell 7, empty/i }).click();
+	await page
+		.getByRole('dialog', { name: /placement preview/i })
+		.getByRole('button', { name: /^confirm$/i })
+		.click();
+
+	await expect(canvas).toHaveAttribute('data-burst', '1');
+	await expect(canvas).toHaveAttribute('data-mode', 'fusion');
+});
+
 test('reduced motion commits instantly and mounts no motion layer', async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce' });
 	await seedRun(page, { grid: gridWith({ 6: 'N' }) });
@@ -243,8 +265,9 @@ test('reduced motion commits instantly and mounts no motion layer', async ({ pag
 		.getByRole('button', { name: /^confirm$/i })
 		.click();
 
-	// No chain playback, no ghost layer, and no motion markers at all.
+	// No chain playback, no ghost layer, no particles, and no motion markers.
 	await expect(page.getByTestId('chain-playback')).toHaveCount(0);
+	await expect(page.locator('canvas.particles')).toHaveCount(0);
 	await expect(page.locator('[data-motion]')).toHaveCount(0);
 	await expect(page.locator('.chain-ghost, .flight-ghost, .score-float')).toHaveCount(0);
 
