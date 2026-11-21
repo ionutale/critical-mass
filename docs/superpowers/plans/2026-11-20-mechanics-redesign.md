@@ -248,11 +248,11 @@ The existing app must keep building until the switchover. New code lives in para
 **Interfaces:**
 
 - Consumes: Task 9 components; Task 8 store.
-- Produces: `dragPlacement` action/API: `begin(cardIndex)`, live `hoverCell`, `commit()`, `cancel()`; keyboard handler (arrows move ghost, Enter/Space commit, Escape cancel); swipe mapping (up → Stabilize picker, tile-off → Scrap, down → cancel).
+- Produces: `dragPlacement` action/API: `begin(cardIndex)`, live `hoverCell`, `commit()`, `cancel()`; keyboard handler (arrows move ghost, Enter/Space commit, Escape cancel); swipe mapping (up → Stabilize picker, tile-off → Scrap, down → cancel). `RunScreen` holds a `choices: number[]`; `PreviewPanel` gains `onChoose(step, option)` and renders per-step option buttons; commit calls `place(handIndex, cell, choices)` with the same array used for the preview.
 
-- [ ] **Step 1: Write failing tests:** simulating pointer down on a card then up on a cell commits that placement; hovering a cell updates the live preview; cancel restores state; keyboard arrows move the ghost and Enter commits the same preview; swipe up opens the stabilize picker; dragging a tile off calls scrap; reduced motion does not change the commits.
+- [ ] **Step 1: Write failing tests:** simulating pointer down on a card then up on a cell commits that placement; hovering a cell updates the live preview; per-step branch option buttons change the preview and the commit uses the chosen `choices` (invalid choice falls back); cancel restores state; keyboard arrows move the ghost and Enter commits the same preview; swipe up opens the stabilize picker; dragging a tile off calls scrap; reduced motion does not change the commits.
 - [ ] **Step 2: Run** `pnpm test -- run`; expect FAIL.
-- [ ] **Step 3: Implement** pointer-drag with a floating card, live preview, commit/cancel, full keyboard path, and swipe handlers. Prevent page scroll only while dragging on the board.
+- [ ] **Step 3: Implement** pointer-drag with a floating card, live preview, commit/cancel, full keyboard path, per-step branch selection in the live preview (option buttons + keyboard), and swipe handlers. Commit must pass the identical `choices` used to compute the preview. Prevent page scroll only while dragging on the board.
 - [ ] **Step 4: Run** `pnpm test -- run && pnpm check`; expect PASS.
 - [ ] **Step 5: Commit** `feat: drag, keyboard, and swipe interaction`.
 
