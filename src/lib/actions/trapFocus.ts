@@ -4,7 +4,7 @@
  */
 export function trapFocus(
 	node: HTMLElement,
-	options: { onEscape?: () => void } = {}
+	options: { onEscape?: () => void; initialFocus?: string } = {}
 ): { destroy: () => void; update: (next: { onEscape?: () => void }) => void } {
 	const previous = typeof document === 'undefined' ? null : document.activeElement;
 	const selector =
@@ -50,7 +50,10 @@ export function trapFocus(
 	if (!node.hasAttribute('tabindex')) node.setAttribute('tabindex', '-1');
 	node.addEventListener('keydown', onKeydown);
 	document.addEventListener('focusin', onFocusIn);
-	(focusables()[0] ?? node).focus();
+	const initial = options.initialFocus
+		? (node.querySelector<HTMLElement>(options.initialFocus) ?? focusables()[0])
+		: focusables()[0];
+	(initial ?? node).focus();
 
 	return {
 		update(next: { onEscape?: () => void }) {

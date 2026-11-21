@@ -38,6 +38,13 @@
 
 	const placed = $derived(name(card));
 	const result = $derived(preview.grid[cell] ?? card);
+
+	/** Escape closes the inline docks; the modal is handled by `trapFocus`. */
+	function onDockKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		onCancel();
+	}
 </script>
 
 {#snippet body()}
@@ -57,21 +64,23 @@
 					</p>
 					<p class="gain mono">+{step.points} points · +{step.heat} heat</p>
 
-					<div class="options" role="group" aria-label={`Step ${step.step} fusion choice`}>
-						{#each step.options as option, optionIndex (option.cell)}
-							<button
-								type="button"
-								class="option"
-								class:chosen={step.choice === optionIndex}
-								aria-pressed={step.choice === optionIndex}
-								data-testid={`preview-option-${step.step}-${optionIndex}`}
-								onclick={() => onChoose?.(step.step - 1, optionIndex)}
-							>
-								<span>{name(option.other)} <span class="op">→</span> {name(option.result)}</span>
-								<span class="option-score mono">+{option.points} · +{option.heat} heat</span>
-							</button>
-						{/each}
-					</div>
+					{#if mode !== 'drag'}
+						<div class="options" role="group" aria-label={`Step ${step.step} fusion choice`}>
+							{#each step.options as option, optionIndex (option.cell)}
+								<button
+									type="button"
+									class="option"
+									class:chosen={step.choice === optionIndex}
+									aria-pressed={step.choice === optionIndex}
+									data-testid={`preview-option-${step.step}-${optionIndex}`}
+									onclick={() => onChoose?.(step.step - 1, optionIndex)}
+								>
+									<span>{name(option.other)} <span class="op">→</span> {name(option.result)}</span>
+									<span class="option-score mono">+{option.points} · +{option.heat} heat</span>
+								</button>
+							{/each}
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ol>
@@ -124,14 +133,21 @@
 			role="dialog"
 			aria-modal="true"
 			aria-label="Placement preview"
-			use:trapFocus={{ onEscape: onCancel }}
+			use:trapFocus={{ onEscape: onCancel, initialFocus: '.confirm' }}
 		>
 			{@render body()}
 		</div>
 	</div>
 {:else}
 	<div class="dock" data-mode={mode}>
-		<div class="panel inline" role="dialog" aria-modal="false" aria-label="Placement preview">
+		<div
+			class="panel inline"
+			role="dialog"
+			aria-modal="false"
+			aria-label="Placement preview"
+			tabindex="-1"
+			onkeydown={onDockKeydown}
+		>
 			{@render body()}
 		</div>
 	</div>

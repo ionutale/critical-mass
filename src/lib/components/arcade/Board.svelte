@@ -67,7 +67,8 @@
 				cell,
 				symbol: tile,
 				disabled: disabled || tile === null,
-				onScrap: (target: number) => onScrapTile?.(target)
+				onScrap: (target: number) => onScrapTile?.(target),
+				onSwipeCancel: () => onSwipeDown?.()
 			}}
 			onclick={() => onCell?.(cell)}
 		>
@@ -93,8 +94,6 @@
 		border: 1px solid var(--line);
 		border-radius: 12px;
 		box-shadow: inset 0 0 26px rgba(56, 225, 255, 0.05);
-		/* The reactor is a gesture surface: swipes must not scroll the page. */
-		touch-action: none;
 	}
 
 	.cell {

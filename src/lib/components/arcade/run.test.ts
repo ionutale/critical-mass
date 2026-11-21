@@ -330,9 +330,11 @@ describe('run screen drag', () => {
 
 		await fireEvent.pointerDown(card, DRAG_START);
 		expect(document.querySelector('[data-drag-ghost]')).not.toBeNull();
-		expect(document.body.style.touchAction).toBe('none');
+		// Nothing is claimed until the pointer actually starts dragging.
+		expect(document.body.style.touchAction).toBe('');
 
 		await fireEvent.pointerMove(cell, DRAG_OVER);
+		expect(document.body.style.touchAction).toBe('none');
 		const live = screen.getByRole('dialog', { name: /placement preview/i });
 		expect(within(live).getByTestId('preview-score')).toHaveTextContent(`+${expected.scoreGain}`);
 		expect(within(live).getByTestId('preview-heat')).toHaveTextContent(
@@ -452,6 +454,163 @@ describe('run screen drag', () => {
 			String(expected.heatAfterTurn)
 		);
 	});
+
+	it('does not commit a release that was never previewed', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		await fireEvent.pointerDown(card, DRAG_START);
+		await fireEvent.pointerMove(screen.getByRole('button', { name: /^cell 12,/i }), DRAG_OVER);
+		expect(screen.getByTestId('preview-result')).toHaveTextContent('Neon');
+
+		// The pointer is released over another cell without ever previewing it.
+		await fireEvent.pointerUp(screen.getByRole('button', { name: /^cell 18,/i }), {
+			...DRAG_OVER,
+			clientX: 220,
+			clientY: 220
+		});
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
+		expect(screen.getByRole('button', { name: /^cell 18,/i })).toHaveTextContent('empty');
+		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
+	});
+
+	it('hides branch buttons in the drag dock and commits the default preview', async () => {
+		const before = branchRun();
+		const expected = previewPlacement(before, 0, CENTER)!;
+		expect(expected.grid[CENTER]).toBe('Ne');
+		initGame({ run: before });
+		render(RunScreen);
+
+		const card = screen.getByRole('button', { name: /carbon card 1/i });
+		const cell = screen.getByRole('button', { name: /^cell 12,/i });
+		await fireEvent.pointerDown(card, DRAG_START);
+		await fireEvent.pointerMove(cell, DRAG_OVER);
+
+		const dock = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(within(dock).queryAllByRole('button', { name: /→/ })).toHaveLength(0);
+		expect(within(dock).queryByTestId('preview-option-1-0')).not.toBeInTheDocument();
+		expect(within(dock).getByTestId('preview-score')).toHaveTextContent(`+${expected.scoreGain}`);
+
+		await fireEvent.pointerUp(cell, DRAG_OVER);
+
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('Neon');
+		expect(screen.getByRole('region', { name: /score/i })).toHaveTextContent(
+			String(expected.scoreGain)
+		);
+	});
+
+	it('restores page scroll only after the last of two drags ends', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const first = screen.getByRole('button', { name: /hydrogen card 1/i });
+		const second = screen.getByRole('button', { name: /helium card 3/i });
+		const centre = screen.getByRole('button', { name: /^cell 12,/i });
+		const corner = screen.getByRole('button', { name: /^cell 18,/i });
+
+		await fireEvent.pointerDown(first, { pointerId: 1, button: 0, clientX: 20, clientY: 320 });
+		await fireEvent.pointerMove(centre, { pointerId: 1, button: 0, clientX: 150, clientY: 140 });
+		expect(document.body.style.touchAction).toBe('none');
+
+		await fireEvent.pointerDown(second, { pointerId: 2, button: 0, clientX: 320, clientY: 320 });
+		await fireEvent.pointerMove(corner, { pointerId: 2, button: 0, clientX: 220, clientY: 140 });
+		expect(document.body.style.touchAction).toBe('none');
+
+		await fireEvent.pointerUp(centre, { pointerId: 1, button: 0, clientX: 150, clientY: 140 });
+		// One owner is still live, so scroll must stay locked.
+		expect(document.body.style.touchAction).toBe('none');
+
+		await fireEvent.pointerUp(corner, { pointerId: 2, button: 0, clientX: 220, clientY: 140 });
+		expect(document.body.style.touchAction).toBe('');
+	});
+
+	it('keeps native scrolling for a horizontal swipe on the hand', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const card = screen.getByRole('button', { name: /hydrogen card 1/i });
+		await fireEvent.pointerDown(card, { pointerId: 3, button: 0, clientX: 20, clientY: 320 });
+		await fireEvent.pointerMove(card, { pointerId: 3, button: 0, clientX: 160, clientY: 326 });
+		expect(document.body.style.touchAction).toBe('');
+
+		await fireEvent.pointerUp(card, { pointerId: 3, button: 0, clientX: 160, clientY: 326 });
+
+		expect(document.body.style.touchAction).toBe('');
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^cell 12,/i })).toHaveTextContent('empty');
+	});
+});
+
+describe('run screen scroll handling', () => {
+	it('leaves the resting board scrollable and claims it only during a vertical swipe', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const board = screen.getByRole('group', { name: /reactor board/i });
+		const empty = screen.getByRole('button', { name: /^cell 0,/i });
+		expect(board.style.touchAction).toBe('');
+
+		await fireEvent.pointerDown(empty, { pointerId: 7, button: 0, clientX: 40, clientY: 320 });
+		expect(board.style.touchAction).toBe('');
+
+		// A short jitter stays below the movement threshold: native scroll.
+		await fireEvent.pointerMove(empty, { pointerId: 7, button: 0, clientX: 40, clientY: 324 });
+		expect(board.style.touchAction).toBe('');
+		await fireEvent.pointerUp(empty, { pointerId: 7, button: 0, clientX: 40, clientY: 324 });
+		expect(board.style.touchAction).toBe('');
+
+		// A vertical swipe past the threshold claims the gesture...
+		await fireEvent.pointerDown(empty, { pointerId: 8, button: 0, clientX: 40, clientY: 320 });
+		await fireEvent.pointerMove(empty, { pointerId: 8, button: 0, clientX: 40, clientY: 300 });
+		expect(board.style.touchAction).toBe('none');
+
+		// ...and hands it back as soon as the pointer is released.
+		await fireEvent.pointerUp(empty, { pointerId: 8, button: 0, clientX: 40, clientY: 300 });
+		expect(board.style.touchAction).toBe('');
+	});
+
+	it('does not claim a horizontal press on the board', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const board = screen.getByRole('group', { name: /reactor board/i });
+		const empty = screen.getByRole('button', { name: /^cell 0,/i });
+		await fireEvent.pointerDown(empty, { pointerId: 9, button: 0, clientX: 40, clientY: 320 });
+		await fireEvent.pointerMove(empty, { pointerId: 9, button: 0, clientX: 160, clientY: 322 });
+		expect(board.style.touchAction).toBe('');
+		await fireEvent.pointerUp(empty, { pointerId: 9, button: 0, clientX: 160, clientY: 322 });
+	});
+
+	it('cancels rather than scraps when a placed tile is swiped down', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const tile = screen.getByRole('button', { name: /^cell 7,/i });
+		await fireEvent.pointerDown(tile, DRAG_START);
+		await fireEvent.pointerMove(document.body, { ...DRAG_START, clientY: 400 });
+		await fireEvent.pointerUp(document.body, { ...DRAG_START, clientY: 400 });
+
+		expect(document.querySelector('[data-drag-ghost]')).toBeNull();
+		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('Hydrogen');
+		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeEnabled();
+	});
+
+	it('still scraps a tile dragged horizontally off its cell', async () => {
+		initGame({ run: arcadeRun() });
+		render(RunScreen);
+
+		const tile = screen.getByRole('button', { name: /^cell 7,/i });
+		const away = screen.getByRole('button', { name: /^cell 0,/i });
+		await fireEvent.pointerDown(tile, DRAG_START);
+		await fireEvent.pointerMove(away, { ...DRAG_START, clientX: 200 });
+		await fireEvent.pointerUp(away, { ...DRAG_START, clientX: 200 });
+
+		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('empty');
+		expect(screen.getByRole('button', { name: /scrap tile/i })).toBeDisabled();
+	});
 });
 
 describe('run screen keyboard', () => {
@@ -521,6 +680,25 @@ describe('run screen keyboard', () => {
 		expect(screen.getByRole('button', { name: /^cell 6,/i })).toHaveTextContent('empty');
 		expect(screen.getByRole('meter', { name: /heat/i })).toHaveAttribute('aria-valuenow', '10');
 	});
+
+	it('cancels with Escape while focus is inside the preview dock', async () => {
+		initGame({ run: branchRun() });
+		render(RunScreen);
+
+		const card = screen.getByRole('button', { name: /carbon card 1/i });
+		card.focus();
+		await fireEvent.keyDown(card, { key: 'ArrowDown' });
+		await fireEvent.keyDown(card, { key: 'ArrowRight' });
+
+		const dock = screen.getByRole('dialog', { name: /placement preview/i });
+		const option = within(dock).getByTestId('preview-option-1-0');
+		option.focus();
+		await fireEvent.keyDown(option, { key: 'Escape' });
+
+		expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: /^cell 6,/i })).toHaveTextContent('empty');
+		expect(screen.getByRole('button', { name: /^cell 7,/i })).toHaveTextContent('Hydrogen');
+	});
 });
 
 describe('run screen branch choices', () => {
@@ -588,6 +766,17 @@ describe('run screen branch choices', () => {
 		expect(state.grid).toEqual(fallback.grid);
 		expect(state.score).toBe(fallback.scoreGain);
 		expect(state.heat).toBe(fallback.heatAfterTurn);
+	});
+
+	it('opens the tap preview with focus on Confirm, not the branch buttons', async () => {
+		initGame({ run: branchRun() });
+		render(RunScreen);
+
+		await fireEvent.click(screen.getByRole('button', { name: /carbon card 1/i }));
+		await fireEvent.click(screen.getByRole('button', { name: /^cell 12,/i }));
+
+		const dialog = screen.getByRole('dialog', { name: /placement preview/i });
+		expect(document.activeElement).toBe(within(dialog).getByRole('button', { name: /confirm/i }));
 	});
 });
 

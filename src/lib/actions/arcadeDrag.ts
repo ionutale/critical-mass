@@ -3,6 +3,30 @@ import type { ElementSymbol } from '../types';
 /** Vertical travel, in pixels, that counts as a swipe. */
 export const SWIPE_DISTANCE = 48;
 
+/** Movement, in pixels, before a gesture claims the pointer from native scroll. */
+export const DRAG_THRESHOLD = 8;
+
+/**
+ * Page-scroll lock owners. Every live gesture that has claimed the pointer adds
+ * one owner, and the body is restored only when the last one releases, so two
+ * interleaved drags cannot leave `touch-action: none` behind.
+ */
+let scrollLockOwners = 0;
+let savedBodyTouchAction = '';
+
+function lockPageScroll(): void {
+	if (typeof document === 'undefined') return;
+	if (scrollLockOwners === 0) savedBodyTouchAction = document.body.style.touchAction;
+	scrollLockOwners += 1;
+	document.body.style.touchAction = 'none';
+}
+
+function unlockPageScroll(): void {
+	if (typeof document === 'undefined' || scrollLockOwners === 0) return;
+	scrollLockOwners -= 1;
+	if (scrollLockOwners === 0) document.body.style.touchAction = savedBodyTouchAction;
+}
+
 export interface DragPlacementHandlers {
 	/** A hand card was picked up. */
 	begin(cardIndex: number): void;
@@ -27,8 +51,14 @@ export interface DragTileConfig {
 	disabled?: boolean;
 	/** Called when the tile is released away from its own cell. */
 	onScrap?: (cell: number) => void;
-	/** Called when the gesture ends on the tile's own cell. */
+	/** Called when the gesture ends on the tile's own cell (a tap). */
 	onCancel?: (cell: number) => void;
+	/**
+	 * Called when the gesture is a downward swipe. Cancelling takes precedence
+	 * over scrapping: a swipe down on a placed tile clears the gesture, it does
+	 * not destroy the tile.
+	 */
+	onSwipeCancel?: (cell: number) => void;
 }
 
 export interface SwipeConfig {
@@ -45,10 +75,21 @@ interface Session {
 	ghost: HTMLElement;
 	node: HTMLElement;
 	previousNodeTouchAction: string;
-	previousBodyTouchAction: string;
+	/** True once this session claimed the pointer and owns a page-scroll slot. */
+	scrollLocked: boolean;
 	move: (event: PointerEvent) => void;
 	end: (event: PointerEvent) => void;
 	cancel: (event?: PointerEvent) => void;
+}
+
+/** True when the gesture reads as vertical rather than a horizontal scroll. */
+function isVerticalGesture(dx: number, dy: number): boolean {
+	return Math.abs(dy) >= DRAG_THRESHOLD && Math.abs(dy) >= Math.abs(dx);
+}
+
+/** True once the pointer has travelled far enough to be a gesture, not a tap. */
+function isMoved(dx: number, dy: number): boolean {
+	return Math.max(Math.abs(dx), Math.abs(dy)) >= DRAG_THRESHOLD;
 }
 
 const ARROW_DELTAS: Readonly<Record<string, readonly [row: number, col: number]>> = {
@@ -166,16 +207,11 @@ function openSession(
 		ghost,
 		node,
 		previousNodeTouchAction: node.style.touchAction,
-		previousBodyTouchAction: document.body.style.touchAction,
+		scrollLocked: false,
 		move: () => {},
 		end: () => {},
 		cancel: () => {}
 	};
-
-	// The hand can scroll horizontally, so scroll is suppressed only while a
-	// card is actually being dragged (and over the board, via its CSS).
-	node.style.touchAction = 'none';
-	document.body.style.touchAction = 'none';
 
 	try {
 		node.setPointerCapture?.(event.pointerId);
@@ -186,14 +222,26 @@ function openSession(
 	return session;
 }
 
+/**
+ * Claim the gesture from native scrolling. Called only once the pointer has
+ * moved past `DRAG_THRESHOLD`, so a mostly horizontal swipe on the hand still
+ * scrolls it instead of being swallowed.
+ */
+function suppressScroll(session: Session): void {
+	if (session.scrollLocked) return;
+	session.scrollLocked = true;
+	session.node.style.touchAction = 'none';
+	lockPageScroll();
+}
+
 function closeSession(session: Session): void {
 	window.removeEventListener('pointermove', session.move);
 	window.removeEventListener('pointerup', session.end);
 	window.removeEventListener('pointercancel', session.cancel);
 	session.ghost.remove();
-	session.node.style.touchAction = session.previousNodeTouchAction;
-	if (typeof document !== 'undefined') {
-		document.body.style.touchAction = session.previousBodyTouchAction;
+	if (session.scrollLocked) {
+		session.node.style.touchAction = session.previousNodeTouchAction;
+		unlockPageScroll();
 	}
 	try {
 		session.node.releasePointerCapture?.(session.pointerId);
@@ -219,11 +267,22 @@ export function dragPlacement(node: HTMLElement, config: DragPlacementConfig) {
 
 	function move(event: PointerEvent): void {
 		if (!session || event.pointerId !== session.pointerId) return;
-		if (event.cancelable) event.preventDefault();
 
+		const dx = event.clientX - session.startX;
+		const dy = event.clientY - session.startY;
+
+		// A horizontal swipe belongs to the hand's scroller; only vertical
+		// travel turns the press into a placement drag.
+		if (!session.scrollLocked) {
+			if (!isVerticalGesture(dx, dy)) return;
+			suppressScroll(session);
+		}
+
+		if (event.cancelable) event.preventDefault();
 		positionGhost(session.ghost, event.clientX, event.clientY);
 
-		if (event.clientY - session.startY > SWIPE_DISTANCE) {
+		// Cancel wins over placement: a downward swipe is never a commit.
+		if (dy > SWIPE_DISTANCE) {
 			const handlers = options.handlers;
 			closeSession(session);
 			session = null;
@@ -242,11 +301,22 @@ export function dragPlacement(node: HTMLElement, config: DragPlacementConfig) {
 		if (!session || event.pointerId !== session.pointerId) return;
 
 		const current = session;
+		const hovered = current.lastCell;
+		const dx = event.clientX - current.startX;
+		const dy = event.clientY - current.startY;
 		const cell = cellUnder(event);
 		closeSession(current);
 		session = null;
 
-		if (cell === null) {
+		// Same precedence as `move`, for a pointerup that jumps without moves.
+		if (dy > SWIPE_DISTANCE && Math.abs(dy) >= Math.abs(dx)) {
+			options.handlers?.cancel();
+			return;
+		}
+
+		// Commit only the cell the live preview was already showing. A release
+		// that never hovered a cell has no preview to honour.
+		if (cell === null || cell !== hovered) {
 			options.handlers?.cancel();
 			return;
 		}
@@ -302,19 +372,44 @@ export function dragTile(node: HTMLElement, config: DragTileConfig) {
 
 	function move(event: PointerEvent): void {
 		if (!session || event.pointerId !== session.pointerId) return;
+
+		const dx = event.clientX - session.startX;
+		const dy = event.clientY - session.startY;
+
+		if (!session.scrollLocked) {
+			if (!isMoved(dx, dy)) return;
+			suppressScroll(session);
+		}
+
 		if (event.cancelable) event.preventDefault();
 		positionGhost(session.ghost, event.clientX, event.clientY);
+
+		// Cancel takes precedence over scrap: a downward swipe never destroys
+		// the tile, no matter where the pointer is released.
+		if (dy > SWIPE_DISTANCE && Math.abs(dy) >= Math.abs(dx)) {
+			closeSession(session);
+			session = null;
+			options.onSwipeCancel?.(options.cell);
+		}
 	}
 
 	function end(event: PointerEvent): void {
 		if (!session || event.pointerId !== session.pointerId) return;
 
 		const current = session;
+		const dx = event.clientX - current.startX;
+		const dy = event.clientY - current.startY;
 		const cell = cellUnder(event);
 		closeSession(current);
 		session = null;
 
-		if (cell !== null && cell === options.cell) {
+		if (dy > SWIPE_DISTANCE && Math.abs(dy) >= Math.abs(dx)) {
+			options.onSwipeCancel?.(options.cell);
+			return;
+		}
+
+		// A tap (no real travel) or a release back on the tile is not a scrap.
+		if (!isMoved(dx, dy) || (cell !== null && cell === options.cell)) {
 			options.onCancel?.(options.cell);
 			return;
 		}
@@ -365,21 +460,41 @@ export function dragTile(node: HTMLElement, config: DragTileConfig) {
  */
 export function swipeGestures(node: HTMLElement, config: SwipeConfig) {
 	let options = config;
-	let track: { pointerId: number; x: number; y: number; onTile: boolean } | null = null;
+	let track: {
+		pointerId: number;
+		x: number;
+		y: number;
+		onTile: boolean;
+		locked: boolean;
+		previousTouchAction: string;
+	} | null = null;
 	let swallowClick = false;
+	let swallowTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function armClickSwallow(): void {
+		swallowClick = true;
+		if (swallowTimer !== null) clearTimeout(swallowTimer);
+		// A swipe that produces no click must not eat an unrelated later tap.
+		swallowTimer = setTimeout(() => {
+			swallowClick = false;
+			swallowTimer = null;
+		}, 500);
+	}
 
 	function up(event: PointerEvent): void {
 		const current = track;
 		if (!current || event.pointerId !== current.pointerId) return;
-		stop();
 
 		const dx = event.clientX - current.x;
 		const dy = event.clientY - current.y;
-		if (current.onTile) return;
-		if (Math.abs(dx) > Math.abs(dy)) return;
-		if (Math.abs(dy) < SWIPE_DISTANCE) return;
+		const vertical = Math.abs(dy) >= Math.abs(dx) && Math.abs(dy) >= SWIPE_DISTANCE;
+		stop();
 
-		swallowClick = true;
+		if (!vertical) return;
+		armClickSwallow();
+		// Presses on a tile belong to `dragTile`, which performs its own cancel
+		// on a downward swipe; only the click is swallowed here.
+		if (current.onTile) return;
 		if (dy < 0) options.onSwipeUp?.();
 		else options.onSwipeDown?.();
 	}
@@ -388,10 +503,33 @@ export function swipeGestures(node: HTMLElement, config: SwipeConfig) {
 		stop();
 	}
 
+	function move(event: PointerEvent): void {
+		const current = track;
+		if (!current || event.pointerId !== current.pointerId) return;
+		if (current.locked) {
+			if (event.cancelable) event.preventDefault();
+			return;
+		}
+		if (current.onTile) return;
+
+		const dx = event.clientX - current.x;
+		const dy = event.clientY - current.y;
+		if (!isVerticalGesture(dx, dy)) return;
+
+		// Claim the gesture only once it is unmistakably a vertical swipe, so a
+		// resting board still scrolls the page and a horizontal drag stays native.
+		current.locked = true;
+		node.style.touchAction = 'none';
+		if (event.cancelable) event.preventDefault();
+	}
+
 	function stop(): void {
+		const current = track;
 		track = null;
+		window.removeEventListener('pointermove', move);
 		window.removeEventListener('pointerup', up);
 		window.removeEventListener('pointercancel', cancel);
+		if (current?.locked) node.style.touchAction = current.previousTouchAction;
 	}
 
 	function down(event: PointerEvent): void {
@@ -405,22 +543,37 @@ export function swipeGestures(node: HTMLElement, config: SwipeConfig) {
 			pointerId: event.pointerId,
 			x: event.clientX,
 			y: event.clientY,
-			onTile: cell?.dataset.filled === 'true'
+			onTile: cell?.dataset.filled === 'true',
+			locked: false,
+			previousTouchAction: node.style.touchAction
 		};
 
+		window.addEventListener('pointermove', move, { passive: false });
 		window.addEventListener('pointerup', up);
 		window.addEventListener('pointercancel', cancel);
+	}
+
+	/** A press that loses focus or leaves the surface can no longer complete. */
+	function abandon(event?: Event): void {
+		if (event && 'buttons' in event && (event as PointerEvent).buttons !== 0) return;
+		stop();
 	}
 
 	function click(event: MouseEvent): void {
 		if (!swallowClick) return;
 		swallowClick = false;
+		if (swallowTimer !== null) {
+			clearTimeout(swallowTimer);
+			swallowTimer = null;
+		}
 		event.preventDefault();
 		event.stopPropagation();
 	}
 
 	node.addEventListener('pointerdown', down);
+	node.addEventListener('pointerleave', abandon);
 	node.addEventListener('click', click, true);
+	window.addEventListener('blur', abandon);
 
 	return {
 		update(next: SwipeConfig) {
@@ -428,7 +581,13 @@ export function swipeGestures(node: HTMLElement, config: SwipeConfig) {
 		},
 		destroy() {
 			node.removeEventListener('pointerdown', down);
+			node.removeEventListener('pointerleave', abandon);
 			node.removeEventListener('click', click, true);
+			window.removeEventListener('blur', abandon);
+			if (swallowTimer !== null) {
+				clearTimeout(swallowTimer);
+				swallowTimer = null;
+			}
 			stop();
 		}
 	};
